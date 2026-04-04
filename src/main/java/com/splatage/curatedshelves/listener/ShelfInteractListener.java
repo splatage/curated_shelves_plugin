@@ -1,0 +1,123 @@
+package com.splatage.curatedshelves.listener;
+
+import com.splatage.curatedshelves.CuratedShelvesPlugin;
+import com.splatage.curatedshelves.domain.LibraryShelf;
+import com.splatage.curatedshelves.domain.LocationKey;
+import com.splatage.curatedshelves.gui.LibraryViews;
+import com.splatage.curatedshelves.service.BadgeService;
+import com.splatage.curatedshelves.service.LibraryService;
+import com.splatage.curatedshelves.service.ShelfMarkerService;
+import com.splatage.curatedshelves.util.LibraryItems;
+import org.bukkit.GameMode;
+import org.bukkit.block.Block;
+import org.bukkit.entity.Player;
+import org.bukkit.event.EventHandler;
+import org.bukkit.event.EventPriority;
+import org.bukkit.event.Listener;
+import org.bukkit.event.block.Action;
+import org.bukkit.event.player.PlayerInteractEvent;
+import org.bukkit.inventory.EquipmentSlot;
+import org.bukkit.inventory.ItemStack;
+
+import java.util.Optional;
+
+public final class ShelfInteractListener implements Listener {
+    private final CuratedShelvesPlugin plugin;
+    private final LibraryService libraryService;
+    private final ShelfMarkerService shelfMarkerService;
+    private final BadgeService badgeService;
+
+    public ShelfInteractListener(
+            final CuratedShelvesPlugin plugin,
+            final LibraryService libraryService,
+            final ShelfMarkerService shelfMarkerService,
+            final BadgeService badgeService
+    ) {
+        this.plugin = plugin;
+        this.libraryService = libraryService;
+        this.shelfMarkerService = shelfMarkerService;
+        this.badgeService = badgeService;
+    }
+
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+    public void onPlayerInteract(final PlayerInteractEvent event) {
+        if (event.getHand() != EquipmentSlot.HAND) {
+            return;
+        }
+        if (event.getAction() != Action.RIGHT_CLICK_BLOCK) {
+            return;
+        }
+        final Block block = event.getClickedBlock();
+        if (block == null || !this.shelfMarkerService.isEligibleBlock(block)) {
+            return;
+        }
+
+        final ItemStack heldItem = event.getPlayer().getInventory().getItemInMainHand();
+        if (LibraryItems.isLibrariansSeal(this.plugin.pdcKeys(), heldItem)) {
+            event.setCancelled(true);
+            handleSealUse(event.getPlayer(), block);
+            return;
+        }
+
+        if (!this.shelfMarkerService.isMarked(block)) {
+            return;
+        }
+
+        event.setCancelled(true);
+        if (!event.getPlayer().hasPermission("curatedshelves.use")) {
+            event.getPlayer().sendMessage("You do not have permission to use Library Shelves.");
+            return;
+        }
+
+        final Optional<java.util.UUID> shelfId = this.shelfMarkerService.shelfId(block);
+        if (shelfId.isEmpty() || this.libraryService.shelfById(shelfId.get()).isEmpty()) {
+            event.getPlayer().sendMessage("This Library Shelf is unavailable.");
+            return;
+        }
+        LibraryViews.openShelfMenu(event.getPlayer(), this.libraryService.snapshot(shelfId.get()));
+    }
+
+    private void handleSealUse(final Player player, final Block block) {
+        if (this.shelfMarkerService.isMarked(block)) {
+            player.sendMessage("That shelf is already marked as a Library Shelf.");
+            return;
+        }
+
+        final LibraryShelf shelf = this.libraryService.newShelf(LocationKey.fromLocation(block.getLocation()), this.plugin.pluginConfig().rows());
+        this.libraryService.createShelf(
+                shelf,
+                () -> this.plugin.schedulerFacade().runAtLocation(block.getLocation(), () -> {
+                    if (!this.shelfMarkerService.isEligibleBlock(block)) {
+                        this.libraryService.deleteShelf(shelf.shelfId(), () -> { }, deleteFailure ->
+                                this.plugin.getLogger().log(java.util.logging.Level.SEVERE, "Failed to clean up orphaned Library Shelf", deleteFailure)
+                        );
+                        player.sendMessage("The target shelf changed before it could be marked.");
+                        return;
+                    }
+                    this.shelfMarkerService.mark(block, shelf.shelfId());
+                    this.badgeService.ensureBadge(block, shelf);
+                    if (player.getGameMode() != GameMode.CREATIVE) {
+                        consumeOneSeal(player);
+                    }
+                    player.sendMessage("Library Shelf created.");
+                }),
+                throwable -> this.plugin.schedulerFacade().runForPlayer(player, () -> {
+                    this.plugin.getLogger().log(java.util.logging.Level.SEVERE, "Failed to create Library Shelf", throwable);
+                    player.sendMessage("Failed to create the Library Shelf.");
+                })
+        );
+    }
+
+    private void consumeOneSeal(final Player player) {
+        final ItemStack current = player.getInventory().getItemInMainHand();
+        if (!LibraryItems.isLibrariansSeal(this.plugin.pdcKeys(), current)) {
+            return;
+        }
+        if (current.getAmount() <= 1) {
+            player.getInventory().setItemInMainHand(null);
+            return;
+        }
+        current.setAmount(current.getAmount() - 1);
+        player.getInventory().setItemInMainHand(current);
+    }
+}

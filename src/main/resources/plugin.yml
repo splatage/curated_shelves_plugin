@@ -6,3 +6,25 @@ author: Jonathan Melville
 website: https://github.com/splatage
 api-version: '1.21.11'
 folia-supported: true
+
+commands:
+  library:
+    description: Manage CuratedShelves library shelves.
+    usage: /library <mark|unmark|reload>
+
+permissions:
+  curatedshelves.use:
+    description: Use Library Shelves.
+    default: true
+  curatedshelves.librarian.remove.any:
+    description: Remove any stored library book.
+    default: op
+  curatedshelves.admin.mark:
+    description: Mark a shelf as a Library Shelf.
+    default: op
+  curatedshelves.admin.unmark:
+    description: Unmark an empty Library Shelf.
+    default: op
+  curatedshelves.admin.reload:
+    description: Reload CuratedShelves configuration.
+    default: op
