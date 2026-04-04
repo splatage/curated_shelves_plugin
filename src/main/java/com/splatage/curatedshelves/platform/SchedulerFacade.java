@@ -1,25 +1,14 @@
 package com.splatage.curatedshelves.platform;
 
 import org.bukkit.Location;
-import org.bukkit.entity.Entity;
-import org.bukkit.plugin.Plugin;
+import org.bukkit.entity.Player;
 
-public final class SchedulerFacade {
-    private final Plugin plugin;
+public interface SchedulerFacade {
+    void runGlobal(Runnable task);
 
-    public SchedulerFacade(final Plugin plugin) {
-        this.plugin = plugin;
-    }
+    void runAtLocation(Location location, Runnable task);
 
-    public void executeRegion(final Location location, final Runnable runnable) {
-        this.plugin.getServer().getRegionScheduler().execute(this.plugin, location, runnable);
-    }
+    void runForPlayer(Player player, Runnable task);
 
-    public void executeEntity(final Entity entity, final Runnable runnable) {
-        entity.getScheduler().execute(this.plugin, runnable, null, 1L);
-    }
-
-    public void executeAsync(final Runnable runnable) {
-        this.plugin.getServer().getAsyncScheduler().runNow(this.plugin, task -> runnable.run());
-    }
+    void runAsync(Runnable task);
 }

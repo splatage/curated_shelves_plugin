@@ -1,28 +1,29 @@
 # Curated Shelves Plugin
 
-A Folia-compatible Paper plugin that adds plugin-managed Library Shelves to marked chiseled bookshelves.
+Current stage: **Slice 1 complete — repo/bootstrap only**.
 
-## Build
+This repository currently contains only the initial bootstrap pass for the locked scope:
+- Gradle Kotlin DSL build
+- Gradle wrapper
+- Java 21 + Paper API baseline
+- `plugin.yml` and `config.yml`
+- single implementation tree under `com.splatage.curatedshelves`
+- Folia-safe scheduler facade skeleton
+- plugin main class and config loader
 
-```bash
-./gradlew build
-```
+What is intentionally **not implemented yet**:
+- SQLite persistence
+- Librarian's Seal recipe/item
+- shelf marking and block PDC
+- lectern badge
+- GUI
+- deposit/read/remove rules
+- destruction spill handling
 
-## Runtime baseline
-
-- Paper API `1.21.11-R0.1-SNAPSHOT`
-- Java 21
-- `folia-supported: true`
-
-## Locked scope in this initial repo
-
-- Ordinary chiseled bookshelves remain vanilla.
-- A crafted **Librarian's Seal** marks a chiseled bookshelf as a Library Shelf.
-- Admins may also mark and unmark shelves with `/library mark` and `/library unmark`.
-- Marked shelves show a lectern badge and open a plugin-managed GUI.
-- GUI size is configurable by `rows: 1-4`; total slots are `rows * 9`.
-- Stored books are plugin-managed rather than stored in the real shelf inventory.
-- Tooltips show title, author, and shelved by.
-- Removal is controlled by `shelvedBy`, with optional author rules and a librarian override permission.
-- Breaking or destroying a Library Shelf spills stored books.
-- Claims/build plugins remain responsible for block protection.
+Remaining scope after this pass:
+- Slice 2: persistence and domain storage model
+- Slice 3: marking and Librarian's Seal
+- Slice 4: badge system
+- Slice 5: GUI and interaction
+- Slice 6: destruction spill
+- Slice 7: audit and cleanup

@@ -1,27 +1,8 @@
 name: CuratedShelves
-version: ${version}
+version: '${version}'
 main: com.splatage.curatedshelves.CuratedShelvesPlugin
-description: Plugin-managed library shelves for player-written books.
-author: OpenAI
+description: Plugin-managed curated library shelves for Paper/Folia.
+author: Jonathan Melville
+website: https://github.com/splatage
 api-version: '1.21.11'
 folia-supported: true
-commands:
-  library:
-    description: Manage curated library shelves.
-    usage: /library <mark|unmark|reload>
-permissions:
-  curatedshelves.use:
-    description: Open and use library shelves.
-    default: true
-  curatedshelves.librarian.remove.any:
-    description: Remove any book from any library shelf.
-    default: op
-  curatedshelves.admin.mark:
-    description: Mark a chiseled bookshelf as a library shelf.
-    default: op
-  curatedshelves.admin.unmark:
-    description: Unmark an empty library shelf.
-    default: op
-  curatedshelves.admin.reload:
-    description: Reload the Curated Shelves config.
-    default: op
