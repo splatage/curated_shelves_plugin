@@ -1,0 +1,1 @@
+# curated_shelves_plugin
