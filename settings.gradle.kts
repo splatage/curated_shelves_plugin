@@ -1,1 +1,1 @@
-rootProject.name = "library-plugin"
+rootProject.name = "curated_shelves_plugin"

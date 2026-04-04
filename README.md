@@ -1,37 +1,28 @@
-# Library Plugin
+# Curated Shelves Plugin
 
-A Paper/Folia-compatible Minecraft plugin that adds plugin-managed library shelves.
-
-## Current scope
-
-- Ordinary chiseled bookshelves remain vanilla.
-- A crafted **Librarian's Seal** marks a chiseled bookshelf as a **Library Shelf**.
-- Marked shelves show a lectern badge and open a plugin-managed GUI.
-- GUI size is configured by `rows: 1-4` in `config.yml`.
-- Stored books are plugin-managed written books.
-- Tooltips show title, author, and shelved by.
-- `author-must-deposit` and `author-can-remove-own-book` are configurable.
-- Players with `library.librarian.remove.any` may remove any stored book.
-- Breaking or destroying a library shelf spills stored books.
-- Block protection remains the responsibility of claims/build plugins.
-
-## Commands
-
-- `/library mark`
-- `/library unmark`
-
-## Permissions
-
-- `library.admin.mark`
-- `library.admin.unmark`
-- `library.librarian.remove.any`
+A Folia-compatible Paper plugin that adds plugin-managed Library Shelves to marked chiseled bookshelves.
 
 ## Build
 
-Use Gradle in a Java 21 environment:
-
 ```bash
-gradle build
+./gradlew build
 ```
 
-This repo includes a `build.gradle.kts` for Paper API `1.21.11-R0.1-SNAPSHOT`.
+## Runtime baseline
+
+- Paper API `1.21.11-R0.1-SNAPSHOT`
+- Java 21
+- `folia-supported: true`
+
+## Locked scope in this initial repo
+
+- Ordinary chiseled bookshelves remain vanilla.
+- A crafted **Librarian's Seal** marks a chiseled bookshelf as a Library Shelf.
+- Admins may also mark and unmark shelves with `/library mark` and `/library unmark`.
+- Marked shelves show a lectern badge and open a plugin-managed GUI.
+- GUI size is configurable by `rows: 1-4`; total slots are `rows * 9`.
+- Stored books are plugin-managed rather than stored in the real shelf inventory.
+- Tooltips show title, author, and shelved by.
+- Removal is controlled by `shelvedBy`, with optional author rules and a librarian override permission.
+- Breaking or destroying a Library Shelf spills stored books.
+- Claims/build plugins remain responsible for block protection.
