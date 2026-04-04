@@ -1,0 +1,21 @@
+name: Library
+main: com.splatage.library.LibraryPlugin
+version: ${version}
+api-version: '1.21'
+folia-supported: true
+authors: [splatage]
+description: Plugin-managed library shelves for player-written books.
+commands:
+  library:
+    description: Mark or unmark library shelves.
+    usage: /library <mark|unmark>
+permissions:
+  library.admin.mark:
+    description: Mark a chiseled bookshelf as a library shelf.
+    default: op
+  library.admin.unmark:
+    description: Remove library status from an empty library shelf.
+    default: op
+  library.librarian.remove.any:
+    description: Remove any book from any library shelf.
+    default: op
