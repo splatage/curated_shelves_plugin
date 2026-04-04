@@ -3,7 +3,9 @@ package com.splatage.curatedshelves.service;
 import com.splatage.curatedshelves.util.PdcKeys;
 import org.bukkit.Material;
 import org.bukkit.block.Block;
+import org.bukkit.block.ChiseledBookshelf;
 import org.bukkit.block.TileState;
+import org.bukkit.inventory.ItemStack;
 import org.bukkit.persistence.PersistentDataType;
 
 import java.util.Objects;
@@ -28,6 +30,19 @@ public final class ShelfMarkerService {
         final TileState tileState = (TileState) block.getState();
         return tileState.getPersistentDataContainer().has(this.pdcKeys.libraryShelf(), PersistentDataType.BYTE)
                 && tileState.getPersistentDataContainer().has(this.pdcKeys.shelfId(), PersistentDataType.STRING);
+    }
+
+    public boolean hasPhysicalContents(final Block block) {
+        if (!(block.getState() instanceof ChiseledBookshelf bookshelf)) {
+            return false;
+        }
+        for (final ItemStack itemStack : bookshelf.getInventory().getContents()) {
+            if (itemStack == null || itemStack.getType() == Material.AIR) {
+                continue;
+            }
+            return true;
+        }
+        return false;
     }
 
     public Optional<UUID> shelfId(final Block block) {

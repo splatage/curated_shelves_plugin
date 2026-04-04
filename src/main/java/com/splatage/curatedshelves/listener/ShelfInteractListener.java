@@ -63,15 +63,20 @@ public final class ShelfInteractListener implements Listener {
             return;
         }
 
-        event.setCancelled(true);
-        if (!event.getPlayer().hasPermission("curatedshelves.use")) {
-            event.getPlayer().sendMessage("You do not have permission to use Library Shelves.");
+        final Optional<java.util.UUID> shelfId = this.shelfMarkerService.shelfId(block);
+        if (shelfId.isEmpty() || this.libraryService.shelfById(shelfId.get()).isEmpty()) {
+            event.setCancelled(true);
+            event.getPlayer().sendMessage("This Library Shelf is unavailable.");
+            return;
+        }
+        if (this.shelfMarkerService.hasPhysicalContents(block)
+                && this.libraryService.snapshot(shelfId.get()).booksBySlot().isEmpty()) {
             return;
         }
 
-        final Optional<java.util.UUID> shelfId = this.shelfMarkerService.shelfId(block);
-        if (shelfId.isEmpty() || this.libraryService.shelfById(shelfId.get()).isEmpty()) {
-            event.getPlayer().sendMessage("This Library Shelf is unavailable.");
+        event.setCancelled(true);
+        if (!event.getPlayer().hasPermission("curatedshelves.use")) {
+            event.getPlayer().sendMessage("You do not have permission to use Library Shelves.");
             return;
         }
         LibraryViews.openShelfMenu(event.getPlayer(), this.libraryService.snapshot(shelfId.get()));
@@ -80,6 +85,10 @@ public final class ShelfInteractListener implements Listener {
     private void handleSealUse(final Player player, final Block block) {
         if (this.shelfMarkerService.isMarked(block)) {
             player.sendMessage("That shelf is already marked as a Library Shelf.");
+            return;
+        }
+        if (this.shelfMarkerService.hasPhysicalContents(block)) {
+            player.sendMessage("That shelf must be empty before it can become a Library Shelf.");
             return;
         }
 

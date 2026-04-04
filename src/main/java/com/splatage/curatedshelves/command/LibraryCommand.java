@@ -82,6 +82,10 @@ public final class LibraryCommand implements CommandExecutor, TabCompleter {
             player.sendMessage("That shelf is already a Library Shelf.");
             return true;
         }
+        if (this.shelfMarkerService.hasPhysicalContents(block)) {
+            player.sendMessage("That shelf must be empty before it can be marked as a Library Shelf.");
+            return true;
+        }
         final LibraryShelf shelf = this.libraryService.newShelf(LocationKey.fromLocation(block.getLocation()), this.plugin.pluginConfig().rows());
         this.libraryService.createShelf(
                 shelf,
