@@ -24,7 +24,6 @@ dependencies {
 
     testImplementation("io.papermc.paper:paper-api:$paperApiVersion")
     testImplementation("org.junit.jupiter:junit-jupiter:5.10.2")
-    testImplementation("org.mockito:mockito-inline:5.2.0")
 }
 
 java {
