@@ -97,12 +97,12 @@ public final class LibraryCommand implements CommandExecutor, TabCompleter {
                                 this.libraryService.discardShelfRuntime(shelf.shelfId());
                                 this.plugin.getLogger().log(Level.SEVERE, "Failed to clean up orphaned Library Shelf", deleteFailure);
                         });
-                        player.sendMessage("The target shelf changed before it could be marked.");
+                        this.plugin.schedulerFacade().runForPlayer(player, () -> player.sendMessage("The target shelf changed before it could be marked."));
                         return;
                     }
                     this.shelfMarkerService.mark(block, shelf.shelfId());
                     this.badgeService.ensureBadge(block, shelf);
-                    player.sendMessage("Library Shelf marked.");
+                    this.plugin.schedulerFacade().runForPlayer(player, () -> player.sendMessage("Library Shelf marked."));
                 }),
                 throwable -> this.plugin.schedulerFacade().runForPlayer(player, () -> {
                     this.plugin.getLogger().log(Level.SEVERE, "Failed to mark Library Shelf", throwable);
@@ -128,36 +128,47 @@ public final class LibraryCommand implements CommandExecutor, TabCompleter {
         }
         final UUID shelfId = this.shelfMarkerService.shelfId(block).orElse(null);
         if (shelfId == null || this.libraryService.shelfById(shelfId).isEmpty()) {
-            if (shelfId != null) {
-                this.badgeService.removeBadge(block, shelfId);
-            }
-            this.shelfMarkerService.unmark(block);
-            player.sendMessage("Invalid Library Shelf marker removed.");
+            this.plugin.schedulerFacade().runAtLocation(block.getLocation(), () -> {
+                if (shelfId != null) {
+                    this.badgeService.removeBadge(block, shelfId);
+                }
+                this.shelfMarkerService.unmark(block);
+                this.plugin.schedulerFacade().runForPlayer(player, () ->
+                        player.sendMessage("Invalid Library Shelf marker removed."));
+            });
             return true;
         }
         final var snapshot = this.libraryService.snapshotIfPresent(shelfId);
         if (snapshot.isEmpty()) {
-            this.badgeService.removeBadge(block, shelfId);
-            this.shelfMarkerService.unmark(block);
-            player.sendMessage("Invalid Library Shelf marker removed.");
+            this.plugin.schedulerFacade().runAtLocation(block.getLocation(), () -> {
+                this.badgeService.removeBadge(block, shelfId);
+                this.shelfMarkerService.unmark(block);
+                this.plugin.schedulerFacade().runForPlayer(player, () ->
+                        player.sendMessage("Invalid Library Shelf marker removed."));
+            });
             return true;
         }
         if (!snapshot.get().booksBySlot().isEmpty()) {
             player.sendMessage("That Library Shelf must be empty before it can be unmarked.");
             return true;
         }
-        this.libraryService.deleteShelf(
-                shelfId,
-                () -> this.plugin.schedulerFacade().runAtLocation(block.getLocation(), () -> {
-                    this.shelfMarkerService.unmark(block);
-                    this.badgeService.removeBadge(block, shelfId);
-                    player.sendMessage("Library Shelf unmarked.");
-                }),
-                throwable -> this.plugin.schedulerFacade().runForPlayer(player, () -> {
-                    this.plugin.getLogger().log(Level.SEVERE, "Failed to unmark Library Shelf", throwable);
-                    player.sendMessage("Failed to unmark that shelf.");
-                })
-        );
+        if (!this.libraryService.beginShelfRemoval(shelfId)) {
+            player.sendMessage("That Library Shelf is already being removed.");
+            return true;
+        }
+        this.plugin.schedulerFacade().runAtLocation(block.getLocation(), () -> {
+            this.shelfMarkerService.unmark(block);
+            this.badgeService.removeBadge(block, shelfId);
+            this.libraryService.deleteShelf(
+                    shelfId,
+                    () -> this.plugin.schedulerFacade().runForPlayer(player, () -> player.sendMessage("Library Shelf unmarked.")),
+                    throwable -> {
+                        this.libraryService.discardShelfRuntime(shelfId);
+                        this.plugin.getLogger().log(Level.SEVERE, "Failed to unmark Library Shelf", throwable);
+                        this.plugin.schedulerFacade().runForPlayer(player, () -> player.sendMessage("Failed to unmark that shelf. Runtime state discarded."));
+                    }
+            );
+        });
         return true;
     }
 

@@ -3,10 +3,17 @@ author-must-deposit: false
 author-can-remove-own-book: false
 
 storage:
+  # Supported values: sqlite, mysql
   type: sqlite
+
+  # Optional prefix applied to Curated Shelves tables.
+  # Example: wild_
   table-prefix: ''
+
   sqlite:
+    # File name inside the plugin data folder.
     file: library.db
+
   mysql:
     host: localhost
     port: 3306

@@ -82,7 +82,6 @@ public final class MySqlLibraryRepository extends AbstractJdbcLibraryRepository 
                     """.formatted(booksTable(), booksTable(), booksTable(), shelvesTable()));
         }
         ensureUniqueLocationIndex(connection);
-        ensureColumnExists(connection, booksTable(), "author_uuid", "VARCHAR(36)");
     }
 
     @Override

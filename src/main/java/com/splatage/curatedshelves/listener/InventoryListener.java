@@ -72,6 +72,12 @@ public final class InventoryListener implements Listener {
     private void handleShelfBrowserClick(final InventoryClickEvent event, final ShelfBrowserMenuHolder holder) {
         final Player player = (Player) event.getWhoClicked();
         final Inventory topInventory = event.getView().getTopInventory();
+        if (!player.hasPermission("curatedshelves.admin.browse")) {
+            event.setCancelled(true);
+            player.closeInventory();
+            player.sendMessage("You do not have permission to browse Curated Shelves.");
+            return;
+        }
         if (event.isShiftClick()) {
             event.setCancelled(true);
             return;
@@ -115,13 +121,18 @@ public final class InventoryListener implements Listener {
         }
         event.setCancelled(true);
 
+        if (!canOpenLibraryMenu(player)) {
+            player.sendMessage("You do not have permission to use Library Shelves.");
+            return;
+        }
         if (this.pendingPlayers.contains(player.getUniqueId())) {
             player.sendMessage("Please wait for the current library action to finish.");
             return;
         }
 
         final UUID shelfId = holder.shelfId();
-        if (this.libraryService.shelfById(shelfId).isEmpty()) {
+        final boolean canUseShelves = player.hasPermission("curatedshelves.use");
+        if (this.libraryService.shelfById(shelfId).isEmpty() || this.libraryService.isShelfPendingRemoval(shelfId)) {
             player.closeInventory();
             player.sendMessage("That Library Shelf is no longer available.");
             return;
@@ -140,6 +151,10 @@ public final class InventoryListener implements Listener {
         }
 
         if (!LibraryItems.isSupportedBook(cursor)) {
+            return;
+        }
+        if (!canUseShelves) {
+            player.sendMessage("You do not have permission to shelve books.");
             return;
         }
         if (!this.libraryService.canDepositBook(player, cursor, this.plugin.pluginConfig())) {
@@ -184,11 +199,15 @@ public final class InventoryListener implements Listener {
             return;
         }
         event.setCancelled(true);
+        if (!canOpenLibraryMenu(player)) {
+            player.sendMessage("You do not have permission to use Library Shelves.");
+            return;
+        }
         if (this.pendingPlayers.contains(player.getUniqueId())) {
             player.sendMessage("Please wait for the current library action to finish.");
             return;
         }
-        if (this.libraryService.shelfById(holder.shelfId()).isEmpty()) {
+        if (this.libraryService.shelfById(holder.shelfId()).isEmpty() || this.libraryService.isShelfPendingRemoval(holder.shelfId())) {
             player.closeInventory();
             player.sendMessage("That Library Shelf is no longer available.");
             return;
@@ -237,6 +256,11 @@ public final class InventoryListener implements Listener {
                     this.plugin.getLogger().log(Level.SEVERE, "Failed to remove library book after player retired", throwable);
                 })
         );
+    }
+
+    private boolean canOpenLibraryMenu(final Player player) {
+        return player.hasPermission("curatedshelves.use")
+                || player.hasPermission("curatedshelves.admin.browse");
     }
 
     private void refreshLibraryMenu(final Player player, final UUID shelfId) {

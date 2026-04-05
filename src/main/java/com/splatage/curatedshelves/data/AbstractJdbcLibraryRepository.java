@@ -199,21 +199,6 @@ public abstract class AbstractJdbcLibraryRepository implements LibraryRepository
 
     protected abstract void upsertBook(Connection connection, LibraryBook book) throws SQLException;
 
-    protected final void ensureColumnExists(final Connection connection, final String tableName, final String columnName, final String definition) throws SQLException {
-        try (PreparedStatement statement = connection.prepareStatement("SELECT * FROM " + tableName + " LIMIT 0");
-             ResultSet resultSet = statement.executeQuery()) {
-            final int columnCount = resultSet.getMetaData().getColumnCount();
-            for (int index = 1; index <= columnCount; index++) {
-                if (columnName.equalsIgnoreCase(resultSet.getMetaData().getColumnName(index))) {
-                    return;
-                }
-            }
-        }
-        try (Statement statement = connection.createStatement()) {
-            statement.executeUpdate("ALTER TABLE " + tableName + " ADD COLUMN " + columnName + " " + definition);
-        }
-    }
-
     protected final List<UUID> selectReplacedShelfIds(final Connection connection, final LibraryShelf shelf) throws SQLException {
         final List<UUID> replacedShelfIds = new ArrayList<>();
         try (PreparedStatement selectExisting = connection.prepareStatement(

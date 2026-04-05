@@ -81,13 +81,17 @@ public final class ShelfDestroyListener implements Listener {
             this.shelfMarkerService.unmark(block);
             return;
         }
+        this.libraryService.beginShelfRemoval(shelfId);
         this.shelfMarkerService.unmark(block);
         this.badgeService.removeBadge(block, shelfId);
         spillBooks(block, snapshot.get());
         this.libraryService.deleteShelf(
                 shelfId,
                 () -> { },
-                throwable -> this.plugin.getLogger().log(Level.SEVERE, "Failed to delete destroyed Library Shelf data", throwable)
+                throwable -> {
+                    this.libraryService.discardShelfRuntime(shelfId);
+                    this.plugin.getLogger().log(Level.SEVERE, "Failed to delete destroyed Library Shelf data; runtime state discarded", throwable);
+                }
         );
     }
 

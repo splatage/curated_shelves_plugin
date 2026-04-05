@@ -1,6 +1,6 @@
 # Curated Shelves Plugin
 
-Current stage: **overlay with MySQL-capable storage backends**.
+Current stage: **development overlay with SQL-backed storage and admin shelf browsing**.
 
 This repository currently contains:
 - Gradle Kotlin DSL build and Gradle wrapper
@@ -8,7 +8,7 @@ This repository currently contains:
 - `plugin.yml` and `config.yml`
 - SQLite and MySQL storage backends
 - configurable database table prefix
-- async service writes with in-memory runtime cache backed by persistent SQL storage
+- async persistence with in-memory runtime cache
 - Librarian's Seal recipe/item
 - shelf marking via seal or `/library mark`
 - plugin-managed Library Shelf GUI for reading, deposit, and removal
@@ -27,4 +27,4 @@ Database documentation:
 Known verification gaps:
 - this repo has not been fully runtime-validated on a live Paper/Folia server from within this environment
 - Gradle compile/test execution could not be run here because the environment cannot reach `services.gradle.org`
-- targeted tests exist for config and the highest-risk service-layer integrity paths, but they are not exhaustive end-to-end Bukkit integration tests
+- automated coverage is currently limited and does **not** cover the highest-risk runtime shelf lifecycle paths end to end

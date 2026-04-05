@@ -69,7 +69,6 @@ public final class SQLiteLibraryRepository extends AbstractJdbcLibraryRepository
                     )
                     """.formatted(booksTable(), shelvesTable()));
         }
-        ensureColumnExists(connection, booksTable(), "author_uuid", "TEXT");
     }
 
     @Override

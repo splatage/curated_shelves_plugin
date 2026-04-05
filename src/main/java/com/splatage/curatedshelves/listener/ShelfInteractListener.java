@@ -64,7 +64,7 @@ public final class ShelfInteractListener implements Listener {
         }
 
         final Optional<java.util.UUID> shelfId = this.shelfMarkerService.shelfId(block);
-        if (shelfId.isEmpty() || this.libraryService.shelfById(shelfId.get()).isEmpty()) {
+        if (shelfId.isEmpty() || this.libraryService.shelfById(shelfId.get()).isEmpty() || this.libraryService.isShelfPendingRemoval(shelfId.get())) {
             event.setCancelled(true);
             event.getPlayer().sendMessage("This Library Shelf is unavailable.");
             return;
@@ -81,7 +81,8 @@ public final class ShelfInteractListener implements Listener {
         }
 
         event.setCancelled(true);
-        if (!event.getPlayer().hasPermission("curatedshelves.use")) {
+        if (!event.getPlayer().hasPermission("curatedshelves.use")
+                && !event.getPlayer().hasPermission("curatedshelves.admin.browse")) {
             event.getPlayer().sendMessage("You do not have permission to use Library Shelves.");
             return;
         }
@@ -107,15 +108,17 @@ public final class ShelfInteractListener implements Listener {
                                 this.libraryService.discardShelfRuntime(shelf.shelfId());
                                 this.plugin.getLogger().log(java.util.logging.Level.SEVERE, "Failed to clean up orphaned Library Shelf", deleteFailure);
                         });
-                        player.sendMessage("The target shelf changed before it could be marked.");
+                        this.plugin.schedulerFacade().runForPlayer(player, () -> player.sendMessage("The target shelf changed before it could be marked."));
                         return;
                     }
                     this.shelfMarkerService.mark(block, shelf.shelfId());
                     this.badgeService.ensureBadge(block, shelf);
-                    if (player.getGameMode() != GameMode.CREATIVE) {
-                        consumeOneSeal(player);
-                    }
-                    player.sendMessage("Library Shelf created.");
+                    this.plugin.schedulerFacade().runForPlayer(player, () -> {
+                        if (player.getGameMode() != GameMode.CREATIVE) {
+                            consumeOneSeal(player);
+                        }
+                        player.sendMessage("Library Shelf created.");
+                    });
                 }),
                 throwable -> this.plugin.schedulerFacade().runForPlayer(player, () -> {
                     this.plugin.getLogger().log(java.util.logging.Level.SEVERE, "Failed to create Library Shelf", throwable);

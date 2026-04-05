@@ -23,6 +23,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
@@ -36,6 +37,7 @@ public final class LibraryService {
     private final Map<UUID, LibraryShelf> shelvesById = new ConcurrentHashMap<>();
     private final Map<UUID, Map<Integer, LibraryBook>> booksByShelf = new ConcurrentHashMap<>();
     private final Map<UUID, LibraryBook> booksById = new ConcurrentHashMap<>();
+    private final Set<UUID> shelvesPendingRemoval = ConcurrentHashMap.newKeySet();
 
     public LibraryService(
             final Plugin plugin,
@@ -90,14 +92,25 @@ public final class LibraryService {
     }
 
     public Optional<LibraryShelf> shelfAt(final LocationKey locationKey) {
-        return Optional.ofNullable(this.shelvesByLocation.get(locationKey));
+        final LibraryShelf shelf = this.shelvesByLocation.get(locationKey);
+        if (shelf == null || this.shelvesPendingRemoval.contains(shelf.shelfId())) {
+            return Optional.empty();
+        }
+        return Optional.of(shelf);
     }
 
     public Optional<LibraryShelf> shelfById(final UUID shelfId) {
-        return Optional.ofNullable(this.shelvesById.get(shelfId));
+        final LibraryShelf shelf = this.shelvesById.get(shelfId);
+        if (shelf == null || this.shelvesPendingRemoval.contains(shelfId)) {
+            return Optional.empty();
+        }
+        return Optional.of(shelf);
     }
 
     public Optional<LibraryShelfSnapshot> snapshotIfPresent(final UUID shelfId) {
+        if (this.shelvesPendingRemoval.contains(shelfId)) {
+            return Optional.empty();
+        }
         final LibraryShelf shelf = this.shelvesById.get(shelfId);
         if (shelf == null) {
             return Optional.empty();
@@ -112,11 +125,14 @@ public final class LibraryService {
     }
 
     public Collection<LibraryShelf> allShelves() {
-        return Collections.unmodifiableCollection(this.shelvesById.values());
+        return Collections.unmodifiableList(this.shelvesById.values().stream()
+                .filter(shelf -> !this.shelvesPendingRemoval.contains(shelf.shelfId()))
+                .toList());
     }
 
     public List<LibraryShelfSnapshot> allShelfSnapshotsSorted() {
         return this.shelvesById.values().stream()
+                .filter(shelf -> !this.shelvesPendingRemoval.contains(shelf.shelfId()))
                 .sorted(Comparator
                         .comparing((LibraryShelf shelf) -> shelf.location().worldUuid())
                         .thenComparingInt(shelf -> shelf.location().x())
@@ -127,6 +143,17 @@ public final class LibraryService {
                         this.booksByShelf.getOrDefault(shelf.shelfId(), Collections.emptyMap())
                 ))
                 .toList();
+    }
+
+    public boolean beginShelfRemoval(final UUID shelfId) {
+        if (!this.shelvesById.containsKey(shelfId)) {
+            return false;
+        }
+        return this.shelvesPendingRemoval.add(shelfId);
+    }
+
+    public boolean isShelfPendingRemoval(final UUID shelfId) {
+        return this.shelvesPendingRemoval.contains(shelfId);
     }
 
     public int firstEmptySlot(final UUID shelfId) {
@@ -241,6 +268,8 @@ public final class LibraryService {
                 onSuccess.run();
             } catch (final Throwable throwable) {
                 onFailure.accept(throwable);
+            } finally {
+                this.shelvesPendingRemoval.remove(shelfId);
             }
         });
     }
@@ -311,6 +340,7 @@ public final class LibraryService {
     }
 
     private void removeShelfRuntime(final UUID shelfId) {
+        this.shelvesPendingRemoval.remove(shelfId);
         final LibraryShelf removedShelf = this.shelvesById.remove(shelfId);
         if (removedShelf != null) {
             this.shelvesByLocation.remove(removedShelf.location(), removedShelf);

@@ -7,6 +7,15 @@ Runtime behavior:
 - create/update/delete persistence is performed asynchronously through the existing scheduler/service flow
 - the database is the durable store across restarts
 
+## Development schema note
+
+This project is still in development.
+
+Schema handling is currently a **hard cut**:
+- the plugin expects the current schema shape
+- no compatibility or migration path is promised for older development databases
+- if your local development schema is outdated, delete or recreate it before testing
+
 ## Supported backends
 
 ### SQLite
@@ -23,7 +32,7 @@ storage:
 Notes:
 - `storage.sqlite.file` is resolved inside the plugin data folder
 - it must be a simple file name, not a path
-- `table-prefix` defaults to empty to preserve the previous table names unless you explicitly configure a prefix
+- `table-prefix` defaults to empty unless you explicitly configure one
 
 ### MySQL
 MySQL is supported through HikariCP and MySQL Connector/J.
