@@ -69,8 +69,14 @@ public final class ShelfInteractListener implements Listener {
             event.getPlayer().sendMessage("This Library Shelf is unavailable.");
             return;
         }
+        final var snapshot = this.libraryService.snapshotIfPresent(shelfId.get());
+        if (snapshot.isEmpty()) {
+            event.setCancelled(true);
+            event.getPlayer().sendMessage("This Library Shelf is unavailable.");
+            return;
+        }
         if (this.shelfMarkerService.hasPhysicalContents(block)
-                && this.libraryService.snapshot(shelfId.get()).booksBySlot().isEmpty()) {
+                && snapshot.get().booksBySlot().isEmpty()) {
             return;
         }
 
@@ -79,7 +85,7 @@ public final class ShelfInteractListener implements Listener {
             event.getPlayer().sendMessage("You do not have permission to use Library Shelves.");
             return;
         }
-        LibraryViews.openShelfMenu(event.getPlayer(), this.libraryService.snapshot(shelfId.get()));
+        LibraryViews.openShelfMenu(event.getPlayer(), snapshot.get());
     }
 
     private void handleSealUse(final Player player, final Block block) {
@@ -92,14 +98,15 @@ public final class ShelfInteractListener implements Listener {
             return;
         }
 
-        final LibraryShelf shelf = this.libraryService.newShelf(LocationKey.fromLocation(block.getLocation()), this.plugin.pluginConfig().rows());
+        final LibraryShelf shelf = this.libraryService.newShelf(LocationKey.fromLocation(block.getLocation()), this.plugin.pluginConfig().rows(), player);
         this.libraryService.createShelf(
                 shelf,
                 () -> this.plugin.schedulerFacade().runAtLocation(block.getLocation(), () -> {
                     if (!this.shelfMarkerService.isEligibleBlock(block)) {
-                        this.libraryService.deleteShelf(shelf.shelfId(), () -> { }, deleteFailure ->
-                                this.plugin.getLogger().log(java.util.logging.Level.SEVERE, "Failed to clean up orphaned Library Shelf", deleteFailure)
-                        );
+                        this.libraryService.deleteShelf(shelf.shelfId(), () -> { }, deleteFailure -> {
+                                this.libraryService.discardShelfRuntime(shelf.shelfId());
+                                this.plugin.getLogger().log(java.util.logging.Level.SEVERE, "Failed to clean up orphaned Library Shelf", deleteFailure);
+                        });
                         player.sendMessage("The target shelf changed before it could be marked.");
                         return;
                     }

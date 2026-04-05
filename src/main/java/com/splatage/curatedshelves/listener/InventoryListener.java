@@ -2,14 +2,17 @@ package com.splatage.curatedshelves.listener;
 
 import com.splatage.curatedshelves.CuratedShelvesPlugin;
 import com.splatage.curatedshelves.domain.LibraryBook;
-import com.splatage.curatedshelves.domain.LibraryShelfSnapshot;
 import com.splatage.curatedshelves.gui.BookActionMenu;
 import com.splatage.curatedshelves.gui.BookActionMenuHolder;
 import com.splatage.curatedshelves.gui.LibraryMenuHolder;
 import com.splatage.curatedshelves.gui.LibraryViews;
+import com.splatage.curatedshelves.gui.ShelfBrowserMenu;
+import com.splatage.curatedshelves.gui.ShelfBrowserMenuHolder;
 import com.splatage.curatedshelves.service.LibraryService;
 import com.splatage.curatedshelves.util.BookCodec;
 import com.splatage.curatedshelves.util.LibraryItems;
+import org.bukkit.Location;
+import org.bukkit.World;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
@@ -43,13 +46,19 @@ public final class InventoryListener implements Listener {
         }
         if (topInventory.getHolder() instanceof BookActionMenuHolder holder) {
             handleBookActionClick(event, holder);
+            return;
+        }
+        if (topInventory.getHolder() instanceof ShelfBrowserMenuHolder holder) {
+            handleShelfBrowserClick(event, holder);
         }
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onInventoryDrag(final InventoryDragEvent event) {
         final Inventory topInventory = event.getView().getTopInventory();
-        if (!(topInventory.getHolder() instanceof LibraryMenuHolder)) {
+        if (!(topInventory.getHolder() instanceof LibraryMenuHolder)
+                && !(topInventory.getHolder() instanceof BookActionMenuHolder)
+                && !(topInventory.getHolder() instanceof ShelfBrowserMenuHolder)) {
             return;
         }
         for (int rawSlot : event.getRawSlots()) {
@@ -58,6 +67,40 @@ public final class InventoryListener implements Listener {
                 return;
             }
         }
+    }
+
+    private void handleShelfBrowserClick(final InventoryClickEvent event, final ShelfBrowserMenuHolder holder) {
+        final Player player = (Player) event.getWhoClicked();
+        final Inventory topInventory = event.getView().getTopInventory();
+        if (event.isShiftClick()) {
+            event.setCancelled(true);
+            return;
+        }
+        if (event.getRawSlot() >= topInventory.getSize()) {
+            return;
+        }
+        event.setCancelled(true);
+
+        final int rawSlot = event.getRawSlot();
+        if (rawSlot == ShelfBrowserMenu.PREVIOUS_PAGE_SLOT && holder.page() > 0) {
+            LibraryViews.openShelfBrowserMenu(player, this.libraryService.allShelfSnapshotsSorted(), holder.page() - 1);
+            return;
+        }
+        if (rawSlot == ShelfBrowserMenu.NEXT_PAGE_SLOT && holder.page() + 1 < holder.totalPages()) {
+            LibraryViews.openShelfBrowserMenu(player, this.libraryService.allShelfSnapshotsSorted(), holder.page() + 1);
+            return;
+        }
+        final UUID shelfId = holder.shelfIdAt(rawSlot);
+        if (shelfId == null) {
+            return;
+        }
+        final var snapshot = this.libraryService.snapshotIfPresent(shelfId);
+        if (snapshot.isEmpty()) {
+            player.sendMessage("That Library Shelf is no longer available.");
+            LibraryViews.openShelfBrowserMenu(player, this.libraryService.allShelfSnapshotsSorted(), holder.page());
+            return;
+        }
+        LibraryViews.openShelfMenu(player, snapshot.get());
     }
 
     private void handleLibraryMenuClick(final InventoryClickEvent event, final LibraryMenuHolder holder) {
@@ -78,10 +121,15 @@ public final class InventoryListener implements Listener {
         }
 
         final UUID shelfId = holder.shelfId();
+        if (this.libraryService.shelfById(shelfId).isEmpty()) {
+            player.closeInventory();
+            player.sendMessage("That Library Shelf is no longer available.");
+            return;
+        }
+
         final int clickedSlot = event.getRawSlot();
         final ItemStack cursor = event.getCursor();
-        final LibraryShelfSnapshot snapshot = this.libraryService.snapshot(shelfId);
-        final LibraryBook existingBook = snapshot.booksBySlot().get(clickedSlot);
+        final LibraryBook existingBook = this.libraryService.bookAt(shelfId, clickedSlot).orElse(null);
         if (existingBook != null) {
             if (this.libraryService.canRemoveBook(player, existingBook, this.plugin.pluginConfig())) {
                 LibraryViews.openBookActionMenu(player, shelfId, existingBook.bookId());
@@ -101,6 +149,7 @@ public final class InventoryListener implements Listener {
 
         final ItemStack depositItem = cursor.clone();
         depositItem.setAmount(1);
+        final Location returnLocation = player.getLocation().clone();
         decrementCursor(event);
         this.pendingPlayers.add(player.getUniqueId());
         final LibraryBook newBook = this.libraryService.newBook(shelfId, clickedSlot, depositItem, player);
@@ -110,13 +159,17 @@ public final class InventoryListener implements Listener {
                     this.pendingPlayers.remove(player.getUniqueId());
                     refreshLibraryMenu(player, shelfId);
                     player.sendMessage("Book shelved.");
-                }),
+                }, () -> this.pendingPlayers.remove(player.getUniqueId())),
                 throwable -> this.plugin.schedulerFacade().runForPlayer(player, () -> {
                     this.pendingPlayers.remove(player.getUniqueId());
                     restoreBook(player, depositItem);
                     this.plugin.getLogger().log(Level.SEVERE, "Failed to store library book", throwable);
                     player.sendMessage("Failed to shelve the book.");
                     refreshLibraryMenu(player, shelfId);
+                }, () -> {
+                    this.pendingPlayers.remove(player.getUniqueId());
+                    this.plugin.getLogger().log(Level.SEVERE, "Failed to store library book after player retired", throwable);
+                    dropBook(returnLocation, depositItem);
                 })
         );
     }
@@ -133,6 +186,11 @@ public final class InventoryListener implements Listener {
         event.setCancelled(true);
         if (this.pendingPlayers.contains(player.getUniqueId())) {
             player.sendMessage("Please wait for the current library action to finish.");
+            return;
+        }
+        if (this.libraryService.shelfById(holder.shelfId()).isEmpty()) {
+            player.closeInventory();
+            player.sendMessage("That Library Shelf is no longer available.");
             return;
         }
 
@@ -155,30 +213,39 @@ public final class InventoryListener implements Listener {
             return;
         }
 
+        final ItemStack returnedBook = BookCodec.deserializeItem(book.serializedItem());
+        final Location returnLocation = player.getLocation().clone();
         this.pendingPlayers.add(player.getUniqueId());
         this.libraryService.removeBook(
                 book,
                 () -> this.plugin.schedulerFacade().runForPlayer(player, () -> {
                     this.pendingPlayers.remove(player.getUniqueId());
-                    restoreBook(player, BookCodec.deserializeItem(book.serializedItem()));
+                    restoreBook(player, returnedBook);
                     refreshLibraryMenu(player, holder.shelfId());
                     player.sendMessage("Book removed.");
+                }, () -> {
+                    this.pendingPlayers.remove(player.getUniqueId());
+                    dropBook(returnLocation, returnedBook);
                 }),
                 throwable -> this.plugin.schedulerFacade().runForPlayer(player, () -> {
                     this.pendingPlayers.remove(player.getUniqueId());
                     this.plugin.getLogger().log(Level.SEVERE, "Failed to remove library book", throwable);
                     player.sendMessage("Failed to remove the book.");
                     refreshLibraryMenu(player, holder.shelfId());
+                }, () -> {
+                    this.pendingPlayers.remove(player.getUniqueId());
+                    this.plugin.getLogger().log(Level.SEVERE, "Failed to remove library book after player retired", throwable);
                 })
         );
     }
 
     private void refreshLibraryMenu(final Player player, final UUID shelfId) {
-        if (this.libraryService.shelfById(shelfId).isEmpty()) {
+        final var snapshot = this.libraryService.snapshotIfPresent(shelfId);
+        if (snapshot.isEmpty()) {
             player.closeInventory();
             return;
         }
-        LibraryViews.openShelfMenu(player, this.libraryService.snapshot(shelfId));
+        LibraryViews.openShelfMenu(player, snapshot.get());
     }
 
     private void decrementCursor(final InventoryClickEvent event) {
@@ -200,5 +267,14 @@ public final class InventoryListener implements Listener {
         for (ItemStack leftover : leftovers.values()) {
             player.getWorld().dropItemNaturally(player.getLocation(), leftover);
         }
+    }
+
+    private void dropBook(final Location location, final ItemStack itemStack) {
+        final World world = location.getWorld();
+        if (world == null) {
+            this.plugin.getLogger().warning("Unable to return a library book because the target world is unavailable.");
+            return;
+        }
+        this.plugin.schedulerFacade().runAtLocation(location, () -> world.dropItemNaturally(location, itemStack));
     }
 }

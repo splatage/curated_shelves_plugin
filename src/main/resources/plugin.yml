@@ -6,11 +6,14 @@ author: Jonathan Melville
 website: https://github.com/splatage
 api-version: '1.21.11'
 folia-supported: true
+libraries:
+  - com.zaxxer:HikariCP:6.3.2
+  - com.mysql:mysql-connector-j:9.6.0
 
 commands:
   library:
     description: Manage CuratedShelves library shelves.
-    usage: /library <mark|unmark|reload>
+    usage: /library <mark|unmark|reload|browse>
 
 permissions:
   curatedshelves.use:
@@ -27,4 +30,7 @@ permissions:
     default: op
   curatedshelves.admin.reload:
     description: Reload CuratedShelves configuration.
+    default: op
+  curatedshelves.admin.browse:
+    description: Browse all curated Library Shelves.
     default: op

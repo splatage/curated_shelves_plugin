@@ -6,22 +6,21 @@ import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.block.BlockFace;
+import org.bukkit.block.data.Directional;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.ItemDisplay;
 import org.bukkit.entity.ItemFrame;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.persistence.PersistentDataType;
+import org.bukkit.util.Transformation;
+import org.joml.AxisAngle4f;
+import org.joml.Vector3f;
 
 import java.util.Objects;
 import java.util.UUID;
 
 public final class BadgeService {
-    private static final BlockFace[] BADGE_FACES = {
-            BlockFace.NORTH,
-            BlockFace.EAST,
-            BlockFace.SOUTH,
-            BlockFace.WEST
-    };
+    private static final float BADGE_SCALE = 0.5F;
 
     private final PdcKeys pdcKeys;
 
@@ -32,16 +31,21 @@ public final class BadgeService {
     public void ensureBadge(final org.bukkit.block.Block block, final LibraryShelf shelf) {
         removeBadge(block, shelf.shelfId());
         final World world = Objects.requireNonNull(block.getWorld(), "block.world");
-        for (final BlockFace face : BADGE_FACES) {
-            final Location badgeLocation = badgeLocation(block.getLocation(), face);
-            world.spawn(badgeLocation, ItemDisplay.class, itemDisplay -> {
-                itemDisplay.setItemStack(new ItemStack(Material.LECTERN));
-                itemDisplay.setItemDisplayTransform(ItemDisplay.ItemDisplayTransform.FIXED);
-                itemDisplay.setRotation(yawFor(face), 0.0F);
-                itemDisplay.getPersistentDataContainer().set(this.pdcKeys.badge(), PersistentDataType.BYTE, (byte) 1);
-                itemDisplay.getPersistentDataContainer().set(this.pdcKeys.shelfId(), PersistentDataType.STRING, shelf.shelfId().toString());
-            });
-        }
+        final BlockFace face = frontFace(block);
+        final Location badgeLocation = badgeLocation(block.getLocation(), face);
+        world.spawn(badgeLocation, ItemDisplay.class, itemDisplay -> {
+            itemDisplay.setItemStack(new ItemStack(Material.LECTERN));
+            itemDisplay.setItemDisplayTransform(ItemDisplay.ItemDisplayTransform.FIXED);
+            itemDisplay.setTransformation(new Transformation(
+                    new Vector3f(),
+                    new AxisAngle4f(),
+                    new Vector3f(BADGE_SCALE, BADGE_SCALE, BADGE_SCALE),
+                    new AxisAngle4f()
+            ));
+            itemDisplay.setRotation(yawFor(face), 0.0F);
+            itemDisplay.getPersistentDataContainer().set(this.pdcKeys.badge(), PersistentDataType.BYTE, (byte) 1);
+            itemDisplay.getPersistentDataContainer().set(this.pdcKeys.shelfId(), PersistentDataType.STRING, shelf.shelfId().toString());
+        });
     }
 
     public void removeBadge(final org.bukkit.block.Block block, final UUID shelfId) {
@@ -60,6 +64,13 @@ public final class BadgeService {
             }
             entity.remove();
         }
+    }
+
+    private BlockFace frontFace(final org.bukkit.block.Block block) {
+        if (block.getBlockData() instanceof Directional directional) {
+            return directional.getFacing();
+        }
+        return BlockFace.NORTH;
     }
 
     private Location badgeLocation(final Location blockLocation, final BlockFace face) {

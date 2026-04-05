@@ -19,6 +19,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -34,6 +35,7 @@ public final class LibraryService {
     private final Map<LocationKey, LibraryShelf> shelvesByLocation = new ConcurrentHashMap<>();
     private final Map<UUID, LibraryShelf> shelvesById = new ConcurrentHashMap<>();
     private final Map<UUID, Map<Integer, LibraryBook>> booksByShelf = new ConcurrentHashMap<>();
+    private final Map<UUID, LibraryBook> booksById = new ConcurrentHashMap<>();
 
     public LibraryService(
             final Plugin plugin,
@@ -47,14 +49,35 @@ public final class LibraryService {
 
     public void initialize() throws SQLException {
         this.repository.initialize();
+
+        final Map<LocationKey, LibraryShelf> selectedShelves = new LinkedHashMap<>();
         for (LibraryShelf shelf : this.repository.loadShelves()) {
-            this.shelvesByLocation.put(shelf.location(), shelf);
-            this.shelvesById.put(shelf.shelfId(), shelf);
-            this.booksByShelf.putIfAbsent(shelf.shelfId(), new ConcurrentHashMap<>());
+            final LibraryShelf existing = selectedShelves.get(shelf.location());
+            if (existing == null) {
+                selectedShelves.put(shelf.location(), shelf);
+                continue;
+            }
+            final LibraryShelf keep = existing.updatedAt() >= shelf.updatedAt() ? existing : shelf;
+            final LibraryShelf drop = keep == existing ? shelf : existing;
+            selectedShelves.put(keep.location(), keep);
+            this.repository.deleteShelfCascade(drop.shelfId());
+            this.plugin.getLogger().warning(
+                    "Removed duplicate persisted Library Shelf " + drop.shelfId() + " at " + drop.location()
+                            + " in favor of " + keep.shelfId()
+            );
         }
+
+        for (LibraryShelf shelf : selectedShelves.values()) {
+            putShelfRuntime(shelf);
+        }
+
+        this.repository.deleteOrphanBooks();
         for (LibraryBook book : this.repository.loadBooks()) {
-            this.booksByShelf.computeIfAbsent(book.shelfId(), ignored -> new ConcurrentHashMap<>())
-                    .put(book.slotIndex(), book);
+            if (!this.shelvesById.containsKey(book.shelfId())) {
+                this.plugin.getLogger().warning("Ignoring orphaned library book " + book.bookId() + " for missing shelf " + book.shelfId());
+                continue;
+            }
+            putBookRuntime(book);
         }
     }
 
@@ -74,14 +97,36 @@ public final class LibraryService {
         return Optional.ofNullable(this.shelvesById.get(shelfId));
     }
 
-    public LibraryShelfSnapshot snapshot(final UUID shelfId) {
-        final LibraryShelf shelf = Objects.requireNonNull(this.shelvesById.get(shelfId), "Unknown shelf: " + shelfId);
+    public Optional<LibraryShelfSnapshot> snapshotIfPresent(final UUID shelfId) {
+        final LibraryShelf shelf = this.shelvesById.get(shelfId);
+        if (shelf == null) {
+            return Optional.empty();
+        }
         final Map<Integer, LibraryBook> books = this.booksByShelf.getOrDefault(shelfId, Collections.emptyMap());
-        return new LibraryShelfSnapshot(shelf, books);
+        return Optional.of(new LibraryShelfSnapshot(shelf, books));
+    }
+
+    public LibraryShelfSnapshot snapshot(final UUID shelfId) {
+        return snapshotIfPresent(shelfId)
+                .orElseThrow(() -> new IllegalArgumentException("Unknown shelf: " + shelfId));
     }
 
     public Collection<LibraryShelf> allShelves() {
         return Collections.unmodifiableCollection(this.shelvesById.values());
+    }
+
+    public List<LibraryShelfSnapshot> allShelfSnapshotsSorted() {
+        return this.shelvesById.values().stream()
+                .sorted(Comparator
+                        .comparing((LibraryShelf shelf) -> shelf.location().worldUuid())
+                        .thenComparingInt(shelf -> shelf.location().x())
+                        .thenComparingInt(shelf -> shelf.location().y())
+                        .thenComparingInt(shelf -> shelf.location().z()))
+                .map(shelf -> new LibraryShelfSnapshot(
+                        shelf,
+                        this.booksByShelf.getOrDefault(shelf.shelfId(), Collections.emptyMap())
+                ))
+                .toList();
     }
 
     public int firstEmptySlot(final UUID shelfId) {
@@ -101,14 +146,7 @@ public final class LibraryService {
     }
 
     public Optional<LibraryBook> bookById(final UUID bookId) {
-        for (Map<Integer, LibraryBook> books : this.booksByShelf.values()) {
-            for (LibraryBook book : books.values()) {
-                if (book.bookId().equals(bookId)) {
-                    return Optional.of(book);
-                }
-            }
-        }
-        return Optional.empty();
+        return Optional.ofNullable(this.booksById.get(bookId));
     }
 
     public boolean canRemoveBook(final Player player, final LibraryBook book, final PluginConfig config) {
@@ -121,7 +159,7 @@ public final class LibraryService {
         if (!config.authorCanRemoveOwnBook()) {
             return false;
         }
-        return book.author() != null && !book.author().isBlank() && player.getName().equalsIgnoreCase(book.author());
+        return book.authorUuid() != null && player.getUniqueId().equals(book.authorUuid());
     }
 
     public boolean canDepositBook(final Player player, final ItemStack itemStack, final PluginConfig config) {
@@ -135,21 +173,32 @@ public final class LibraryService {
         return author != null && !author.isBlank() && player.getName().equalsIgnoreCase(author);
     }
 
-    public LibraryShelf newShelf(final LocationKey locationKey, final int rows) {
+    public LibraryShelf newShelf(final LocationKey locationKey, final int rows, final Player player) {
         final long now = Instant.now().toEpochMilli();
-        return new LibraryShelf(UUID.randomUUID(), locationKey, rows, now, now);
+        return new LibraryShelf(
+                UUID.randomUUID(),
+                locationKey,
+                rows,
+                player.getUniqueId(),
+                player.getName(),
+                now,
+                now
+        );
     }
 
     public LibraryBook newBook(final UUID shelfId, final int slotIndex, final ItemStack itemStack, final Player player) {
         final BookMeta bookMeta = (BookMeta) itemStack.getItemMeta();
         final long now = Instant.now().toEpochMilli();
+        final String normalizedAuthor = normalizeText(bookMeta.getAuthor());
+        final UUID authorUuid = resolveAuthorUuid(normalizedAuthor, player);
         return new LibraryBook(
                 UUID.randomUUID(),
                 shelfId,
                 slotIndex,
                 BookCodec.serializeItem(itemStack),
                 normalizeTitle(bookMeta.getTitle()),
-                normalizeText(bookMeta.getAuthor()),
+                normalizedAuthor,
+                authorUuid,
                 player.getUniqueId(),
                 player.getName(),
                 now,
@@ -167,10 +216,11 @@ public final class LibraryService {
     public void createShelf(final LibraryShelf shelf, final Runnable onSuccess, final Consumer<Throwable> onFailure) {
         this.schedulerFacade.runAsync(() -> {
             try {
-                this.repository.upsertShelf(shelf);
-                this.shelvesByLocation.put(shelf.location(), shelf);
-                this.shelvesById.put(shelf.shelfId(), shelf);
-                this.booksByShelf.putIfAbsent(shelf.shelfId(), new ConcurrentHashMap<>());
+                final List<UUID> replacedShelfIds = this.repository.replaceShelfAtLocation(shelf);
+                for (UUID replacedShelfId : replacedShelfIds) {
+                    removeShelfRuntime(replacedShelfId);
+                }
+                putShelfRuntime(shelf);
                 onSuccess.run();
             } catch (final Throwable throwable) {
                 onFailure.accept(throwable);
@@ -186,11 +236,8 @@ public final class LibraryService {
         }
         this.schedulerFacade.runAsync(() -> {
             try {
-                this.repository.deleteBooksForShelf(shelfId);
-                this.repository.deleteShelf(shelfId);
-                this.shelvesById.remove(shelfId);
-                this.shelvesByLocation.remove(shelf.location());
-                this.booksByShelf.remove(shelfId);
+                this.repository.deleteShelfCascade(shelfId);
+                removeShelfRuntime(shelfId);
                 onSuccess.run();
             } catch (final Throwable throwable) {
                 onFailure.accept(throwable);
@@ -198,12 +245,15 @@ public final class LibraryService {
         });
     }
 
+    public void discardShelfRuntime(final UUID shelfId) {
+        removeShelfRuntime(shelfId);
+    }
+
     public void storeBook(final LibraryBook book, final Runnable onSuccess, final Consumer<Throwable> onFailure) {
         this.schedulerFacade.runAsync(() -> {
             try {
                 this.repository.upsertBook(book);
-                this.booksByShelf.computeIfAbsent(book.shelfId(), ignored -> new ConcurrentHashMap<>())
-                        .put(book.slotIndex(), book);
+                putBookRuntime(book);
                 onSuccess.run();
             } catch (final Throwable throwable) {
                 onFailure.accept(throwable);
@@ -215,15 +265,62 @@ public final class LibraryService {
         this.schedulerFacade.runAsync(() -> {
             try {
                 this.repository.deleteBook(book.bookId());
-                final Map<Integer, LibraryBook> books = this.booksByShelf.get(book.shelfId());
-                if (books != null) {
-                    books.remove(book.slotIndex());
-                }
+                removeBookRuntime(book);
                 onSuccess.run();
             } catch (final Throwable throwable) {
                 onFailure.accept(throwable);
             }
         });
+    }
+
+    private UUID resolveAuthorUuid(final String normalizedAuthor, final Player depositingPlayer) {
+        if (normalizedAuthor == null) {
+            return null;
+        }
+        if (depositingPlayer.getName().equalsIgnoreCase(normalizedAuthor)) {
+            return depositingPlayer.getUniqueId();
+        }
+        final Player onlineAuthor = this.plugin.getServer().getPlayerExact(normalizedAuthor);
+        if (onlineAuthor != null) {
+            return onlineAuthor.getUniqueId();
+        }
+        return null;
+    }
+
+    private void putShelfRuntime(final LibraryShelf shelf) {
+        final LibraryShelf replacedAtLocation = this.shelvesByLocation.put(shelf.location(), shelf);
+        if (replacedAtLocation != null && !replacedAtLocation.shelfId().equals(shelf.shelfId())) {
+            removeShelfRuntime(replacedAtLocation.shelfId());
+        }
+        this.shelvesById.put(shelf.shelfId(), shelf);
+        this.booksByShelf.putIfAbsent(shelf.shelfId(), new ConcurrentHashMap<>());
+    }
+
+    private void putBookRuntime(final LibraryBook book) {
+        this.booksByShelf.computeIfAbsent(book.shelfId(), ignored -> new ConcurrentHashMap<>())
+                .put(book.slotIndex(), book);
+        this.booksById.put(book.bookId(), book);
+    }
+
+    private void removeBookRuntime(final LibraryBook book) {
+        final Map<Integer, LibraryBook> books = this.booksByShelf.get(book.shelfId());
+        if (books != null) {
+            books.remove(book.slotIndex());
+        }
+        this.booksById.remove(book.bookId());
+    }
+
+    private void removeShelfRuntime(final UUID shelfId) {
+        final LibraryShelf removedShelf = this.shelvesById.remove(shelfId);
+        if (removedShelf != null) {
+            this.shelvesByLocation.remove(removedShelf.location(), removedShelf);
+        }
+        final Map<Integer, LibraryBook> removedBooks = this.booksByShelf.remove(shelfId);
+        if (removedBooks != null) {
+            for (LibraryBook removedBook : removedBooks.values()) {
+                this.booksById.remove(removedBook.bookId());
+            }
+        }
     }
 
     private String normalizeTitle(final String rawTitle) {

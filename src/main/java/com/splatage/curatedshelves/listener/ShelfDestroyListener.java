@@ -17,7 +17,6 @@ import org.bukkit.event.block.BlockExplodeEvent;
 import org.bukkit.event.entity.EntityExplodeEvent;
 
 import java.util.ArrayList;
-import java.util.List;
 import java.util.UUID;
 import java.util.logging.Level;
 
@@ -69,14 +68,22 @@ public final class ShelfDestroyListener implements Listener {
         }
         final UUID shelfId = this.shelfMarkerService.shelfId(block).orElse(null);
         if (shelfId == null || this.libraryService.shelfById(shelfId).isEmpty()) {
+            if (shelfId != null) {
+                this.badgeService.removeBadge(block, shelfId);
+            }
             this.shelfMarkerService.unmark(block);
             return;
         }
 
-        final LibraryShelfSnapshot snapshot = this.libraryService.snapshot(shelfId);
+        final var snapshot = this.libraryService.snapshotIfPresent(shelfId);
+        if (snapshot.isEmpty()) {
+            this.badgeService.removeBadge(block, shelfId);
+            this.shelfMarkerService.unmark(block);
+            return;
+        }
         this.shelfMarkerService.unmark(block);
         this.badgeService.removeBadge(block, shelfId);
-        spillBooks(block, snapshot);
+        spillBooks(block, snapshot.get());
         this.libraryService.deleteShelf(
                 shelfId,
                 () -> { },

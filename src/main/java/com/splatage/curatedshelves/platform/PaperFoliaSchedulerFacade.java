@@ -27,8 +27,14 @@ public final class PaperFoliaSchedulerFacade implements SchedulerFacade {
 
     @Override
     public void runForPlayer(final Player player, final Runnable task) {
+        runForPlayer(player, task, () -> { });
+    }
+
+    @Override
+    public void runForPlayer(final Player player, final Runnable task, final Runnable retiredTask) {
         Objects.requireNonNull(player, "player");
-        player.getScheduler().run(this.plugin, scheduledTask -> task.run(), null);
+        Objects.requireNonNull(retiredTask, "retiredTask");
+        player.getScheduler().run(this.plugin, scheduledTask -> task.run(), retiredTask::run);
     }
 
     @Override

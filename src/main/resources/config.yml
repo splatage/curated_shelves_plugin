@@ -1,3 +1,17 @@
 rows: 1
 author-must-deposit: false
 author-can-remove-own-book: false
+
+storage:
+  type: sqlite
+  table-prefix: ''
+  sqlite:
+    file: library.db
+  mysql:
+    host: localhost
+    port: 3306
+    database: curated_shelves
+    username: root
+    password: ''
+    maximum-pool-size: 10
+    connection-timeout-millis: 10000

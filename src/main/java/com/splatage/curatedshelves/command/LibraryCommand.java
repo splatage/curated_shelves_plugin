@@ -3,6 +3,7 @@ package com.splatage.curatedshelves.command;
 import com.splatage.curatedshelves.CuratedShelvesPlugin;
 import com.splatage.curatedshelves.domain.LibraryShelf;
 import com.splatage.curatedshelves.domain.LocationKey;
+import com.splatage.curatedshelves.gui.LibraryViews;
 import com.splatage.curatedshelves.service.BadgeService;
 import com.splatage.curatedshelves.service.LibraryService;
 import com.splatage.curatedshelves.service.ShelfMarkerService;
@@ -40,15 +41,16 @@ public final class LibraryCommand implements CommandExecutor, TabCompleter {
     @Override
     public boolean onCommand(final CommandSender sender, final Command command, final String label, final String[] args) {
         if (args.length == 0) {
-            sender.sendMessage("Usage: /library <mark|unmark|reload>");
+            sender.sendMessage("Usage: /library <mark|unmark|reload|browse>");
             return true;
         }
         return switch (args[0].toLowerCase(java.util.Locale.ROOT)) {
             case "mark" -> handleMark(sender);
             case "unmark" -> handleUnmark(sender);
             case "reload" -> handleReload(sender);
+            case "browse" -> handleBrowse(sender);
             default -> {
-                sender.sendMessage("Usage: /library <mark|unmark|reload>");
+                sender.sendMessage("Usage: /library <mark|unmark|reload|browse>");
                 yield true;
             }
         };
@@ -57,7 +59,7 @@ public final class LibraryCommand implements CommandExecutor, TabCompleter {
     @Override
     public List<String> onTabComplete(final CommandSender sender, final Command command, final String alias, final String[] args) {
         if (args.length == 1) {
-            return List.of("mark", "unmark", "reload").stream()
+            return List.of("mark", "unmark", "reload", "browse").stream()
                     .filter(entry -> entry.startsWith(args[0].toLowerCase(java.util.Locale.ROOT)))
                     .toList();
         }
@@ -86,14 +88,15 @@ public final class LibraryCommand implements CommandExecutor, TabCompleter {
             player.sendMessage("That shelf must be empty before it can be marked as a Library Shelf.");
             return true;
         }
-        final LibraryShelf shelf = this.libraryService.newShelf(LocationKey.fromLocation(block.getLocation()), this.plugin.pluginConfig().rows());
+        final LibraryShelf shelf = this.libraryService.newShelf(LocationKey.fromLocation(block.getLocation()), this.plugin.pluginConfig().rows(), player);
         this.libraryService.createShelf(
                 shelf,
                 () -> this.plugin.schedulerFacade().runAtLocation(block.getLocation(), () -> {
                     if (!this.shelfMarkerService.isEligibleBlock(block)) {
-                        this.libraryService.deleteShelf(shelf.shelfId(), () -> { }, deleteFailure ->
-                                this.plugin.getLogger().log(Level.SEVERE, "Failed to clean up orphaned Library Shelf", deleteFailure)
-                        );
+                        this.libraryService.deleteShelf(shelf.shelfId(), () -> { }, deleteFailure -> {
+                                this.libraryService.discardShelfRuntime(shelf.shelfId());
+                                this.plugin.getLogger().log(Level.SEVERE, "Failed to clean up orphaned Library Shelf", deleteFailure);
+                        });
                         player.sendMessage("The target shelf changed before it could be marked.");
                         return;
                     }
@@ -125,11 +128,21 @@ public final class LibraryCommand implements CommandExecutor, TabCompleter {
         }
         final UUID shelfId = this.shelfMarkerService.shelfId(block).orElse(null);
         if (shelfId == null || this.libraryService.shelfById(shelfId).isEmpty()) {
+            if (shelfId != null) {
+                this.badgeService.removeBadge(block, shelfId);
+            }
             this.shelfMarkerService.unmark(block);
             player.sendMessage("Invalid Library Shelf marker removed.");
             return true;
         }
-        if (!this.libraryService.snapshot(shelfId).booksBySlot().isEmpty()) {
+        final var snapshot = this.libraryService.snapshotIfPresent(shelfId);
+        if (snapshot.isEmpty()) {
+            this.badgeService.removeBadge(block, shelfId);
+            this.shelfMarkerService.unmark(block);
+            player.sendMessage("Invalid Library Shelf marker removed.");
+            return true;
+        }
+        if (!snapshot.get().booksBySlot().isEmpty()) {
             player.sendMessage("That Library Shelf must be empty before it can be unmarked.");
             return true;
         }
@@ -153,8 +166,25 @@ public final class LibraryCommand implements CommandExecutor, TabCompleter {
             sender.sendMessage("You do not have permission to reload CuratedShelves.");
             return true;
         }
-        this.plugin.reloadPluginConfig();
-        sender.sendMessage("CuratedShelves configuration reloaded.");
+        try {
+            this.plugin.reloadPluginConfig();
+            sender.sendMessage("CuratedShelves configuration reloaded. Storage backend and table-prefix changes require a restart to take effect.");
+        } catch (final IllegalArgumentException exception) {
+            sender.sendMessage("CuratedShelves configuration reload failed: " + exception.getMessage());
+        }
+        return true;
+    }
+
+    private boolean handleBrowse(final CommandSender sender) {
+        if (!(sender instanceof Player player)) {
+            sender.sendMessage("Only players may use /library browse.");
+            return true;
+        }
+        if (!player.hasPermission("curatedshelves.admin.browse")) {
+            player.sendMessage("You do not have permission to browse CuratedShelves.");
+            return true;
+        }
+        LibraryViews.openShelfBrowserMenu(player, this.libraryService.allShelfSnapshotsSorted(), 0);
         return true;
     }
 

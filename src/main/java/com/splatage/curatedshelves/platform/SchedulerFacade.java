@@ -10,5 +10,9 @@ public interface SchedulerFacade {
 
     void runForPlayer(Player player, Runnable task);
 
+    default void runForPlayer(final Player player, final Runnable task, final Runnable retiredTask) {
+        runForPlayer(player, task);
+    }
+
     void runAsync(Runnable task);
 }
