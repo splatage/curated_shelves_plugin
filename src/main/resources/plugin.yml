@@ -32,5 +32,8 @@ permissions:
     description: Reload CuratedShelves configuration.
     default: op
   curatedshelves.admin.browse:
-    description: Browse all curated Library Shelves.
+    description: Browse and moderate curated Library Shelves from the central GUI.
+    default: op
+  curatedshelves.admin.edit:
+    description: Edit curated Library Shelves from the central GUI and remove any stored book.
     default: op

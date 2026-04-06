@@ -191,7 +191,8 @@ public final class LibraryCommand implements CommandExecutor, TabCompleter {
             sender.sendMessage("Only players may use /library browse.");
             return true;
         }
-        if (!player.hasPermission("curatedshelves.admin.browse")) {
+        if (!player.hasPermission("curatedshelves.admin.browse")
+                && !player.hasPermission("curatedshelves.admin.edit")) {
             player.sendMessage("You do not have permission to browse CuratedShelves.");
             return true;
         }

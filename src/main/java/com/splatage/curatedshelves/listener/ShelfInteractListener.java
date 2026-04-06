@@ -82,7 +82,7 @@ public final class ShelfInteractListener implements Listener {
 
         event.setCancelled(true);
         if (!event.getPlayer().hasPermission("curatedshelves.use")
-                && !event.getPlayer().hasPermission("curatedshelves.admin.browse")) {
+                && !event.getPlayer().hasPermission("curatedshelves.admin.edit")) {
             event.getPlayer().sendMessage("You do not have permission to use Library Shelves.");
             return;
         }
@@ -104,21 +104,39 @@ public final class ShelfInteractListener implements Listener {
                 shelf,
                 () -> this.plugin.schedulerFacade().runAtLocation(block.getLocation(), () -> {
                     if (!this.shelfMarkerService.isEligibleBlock(block)) {
-                        this.libraryService.deleteShelf(shelf.shelfId(), () -> { }, deleteFailure -> {
-                                this.libraryService.discardShelfRuntime(shelf.shelfId());
-                                this.plugin.getLogger().log(java.util.logging.Level.SEVERE, "Failed to clean up orphaned Library Shelf", deleteFailure);
-                        });
+                        this.libraryService.deleteUnboundShelf(shelf.shelfId(), () -> { }, deleteFailure ->
+                                this.plugin.getLogger().log(java.util.logging.Level.SEVERE, "Failed to clean up unbound Library Shelf", deleteFailure)
+                        );
                         this.plugin.schedulerFacade().runForPlayer(player, () -> player.sendMessage("The target shelf changed before it could be marked."));
                         return;
                     }
-                    this.shelfMarkerService.mark(block, shelf.shelfId());
-                    this.badgeService.ensureBadge(block, shelf);
-                    this.plugin.schedulerFacade().runForPlayer(player, () -> {
-                        if (player.getGameMode() != GameMode.CREATIVE) {
-                            consumeOneSeal(player);
+                    try {
+                        this.shelfMarkerService.mark(block, shelf.shelfId());
+                        this.badgeService.ensureBadge(block, shelf);
+                        if (!this.libraryService.activateCreatedShelf(shelf.shelfId())) {
+                            this.shelfMarkerService.unmark(block);
+                            this.badgeService.removeBadge(block, shelf.shelfId());
+                            this.libraryService.deleteUnboundShelf(shelf.shelfId(), () -> { }, deleteFailure ->
+                                    this.plugin.getLogger().log(java.util.logging.Level.SEVERE, "Failed to clean up unbound Library Shelf", deleteFailure)
+                            );
+                            this.plugin.schedulerFacade().runForPlayer(player, () -> player.sendMessage("The Library Shelf could not be finalized."));
+                            return;
                         }
-                        player.sendMessage("Library Shelf created.");
-                    });
+                        this.plugin.schedulerFacade().runForPlayer(player, () -> {
+                            if (player.getGameMode() != GameMode.CREATIVE) {
+                                consumeOneSeal(player);
+                            }
+                            player.sendMessage("Library Shelf created.");
+                        });
+                    } catch (final Throwable throwable) {
+                        this.shelfMarkerService.unmark(block);
+                        this.badgeService.removeBadge(block, shelf.shelfId());
+                        this.libraryService.deleteUnboundShelf(shelf.shelfId(), () -> { }, deleteFailure ->
+                                this.plugin.getLogger().log(java.util.logging.Level.SEVERE, "Failed to clean up unbound Library Shelf", deleteFailure)
+                        );
+                        this.plugin.getLogger().log(java.util.logging.Level.SEVERE, "Failed to finalize Library Shelf binding", throwable);
+                        this.plugin.schedulerFacade().runForPlayer(player, () -> player.sendMessage("Failed to create the Library Shelf."));
+                    }
                 }),
                 throwable -> this.plugin.schedulerFacade().runForPlayer(player, () -> {
                     this.plugin.getLogger().log(java.util.logging.Level.SEVERE, "Failed to create Library Shelf", throwable);

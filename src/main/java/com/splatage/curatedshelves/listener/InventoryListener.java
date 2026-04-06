@@ -72,7 +72,8 @@ public final class InventoryListener implements Listener {
     private void handleShelfBrowserClick(final InventoryClickEvent event, final ShelfBrowserMenuHolder holder) {
         final Player player = (Player) event.getWhoClicked();
         final Inventory topInventory = event.getView().getTopInventory();
-        if (!player.hasPermission("curatedshelves.admin.browse")) {
+        if (!player.hasPermission("curatedshelves.admin.browse")
+                && !player.hasPermission("curatedshelves.admin.edit")) {
             event.setCancelled(true);
             player.closeInventory();
             player.sendMessage("You do not have permission to browse Curated Shelves.");
@@ -263,12 +264,13 @@ public final class InventoryListener implements Listener {
 
     private boolean canOpenLibraryMenu(final Player player) {
         return player.hasPermission("curatedshelves.use")
-                || player.hasPermission("curatedshelves.admin.browse");
+                || player.hasPermission("curatedshelves.admin.browse")
+                || player.hasPermission("curatedshelves.admin.edit");
     }
 
     private boolean canEditLibraryMenu(final Player player) {
         return player.hasPermission("curatedshelves.use")
-                || player.hasPermission("curatedshelves.admin.browse");
+                || player.hasPermission("curatedshelves.admin.edit");
     }
 
     private void refreshLibraryMenu(final Player player, final UUID shelfId) {

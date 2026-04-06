@@ -12,7 +12,7 @@ This repository currently contains:
 - Librarian's Seal recipe/item
 - shelf marking via seal or `/library mark`
 - plugin-managed Library Shelf GUI for reading, deposit, and removal
-- admin curated-shelf browser GUI
+- admin curated-shelf browser GUI with separate browse-only moderation and edit-admin powers
 - `shelvedBy` custody with config-controlled author behavior
 - stable `authorUuid` capture when the author identity can be resolved safely at deposit time
 - front-face lectern badge display

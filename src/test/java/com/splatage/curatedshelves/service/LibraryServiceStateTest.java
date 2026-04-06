@@ -20,6 +20,32 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class LibraryServiceStateTest {
     @Test
+    void createdShelfIsHiddenUntilActivated() {
+        final FakeRepository repository = new FakeRepository();
+        final LibraryService service = new LibraryService(plugin(), new ImmediateScheduler(), repository);
+        final LibraryShelf shelf = new LibraryShelf(
+                UUID.randomUUID(),
+                new LocationKey(UUID.randomUUID(), 20, 64, 20),
+                1,
+                UUID.randomUUID(),
+                "Creator",
+                2L,
+                2L
+        );
+
+        service.createShelf(shelf, () -> { }, throwable -> { throw new AssertionError(throwable); });
+
+        assertTrue(service.shelfById(shelf.shelfId()).isEmpty());
+        assertTrue(service.snapshotIfPresent(shelf.shelfId()).isEmpty());
+        assertTrue(service.allShelfSnapshotsSorted().isEmpty());
+
+        assertTrue(service.activateCreatedShelf(shelf.shelfId()));
+        assertTrue(service.shelfById(shelf.shelfId()).isPresent());
+        assertTrue(service.snapshotIfPresent(shelf.shelfId()).isPresent());
+        assertEquals(1, service.allShelfSnapshotsSorted().size());
+    }
+
+    @Test
     void pendingShelfRemovalHidesShelfFromSnapshotsAndBrowserList() {
         final FakeRepository repository = new FakeRepository();
         final LibraryService service = new LibraryService(plugin(), new ImmediateScheduler(), repository);
@@ -34,6 +60,7 @@ class LibraryServiceStateTest {
         );
 
         service.createShelf(shelf, () -> { }, throwable -> { throw new AssertionError(throwable); });
+        assertTrue(service.activateCreatedShelf(shelf.shelfId()));
 
         assertTrue(service.shelfById(shelf.shelfId()).isPresent());
         assertTrue(service.snapshotIfPresent(shelf.shelfId()).isPresent());

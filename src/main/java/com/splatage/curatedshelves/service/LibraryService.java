@@ -38,6 +38,7 @@ public final class LibraryService {
     private final Map<UUID, Map<Integer, LibraryBook>> booksByShelf = new ConcurrentHashMap<>();
     private final Map<UUID, LibraryBook> booksById = new ConcurrentHashMap<>();
     private final Set<UUID> shelvesPendingRemoval = ConcurrentHashMap.newKeySet();
+    private final Map<UUID, PendingShelfCreate> pendingShelfCreates = new ConcurrentHashMap<>();
 
     public LibraryService(
             final Plugin plugin,
@@ -178,7 +179,7 @@ public final class LibraryService {
 
     public boolean canRemoveBook(final Player player, final LibraryBook book, final PluginConfig config) {
         if (player.hasPermission("curatedshelves.librarian.remove.any")
-                || player.hasPermission("curatedshelves.admin.browse")) {
+                || player.hasPermission("curatedshelves.admin.edit")) {
             return true;
         }
         if (player.getUniqueId().equals(book.shelvedByUuid())) {
@@ -245,13 +246,35 @@ public final class LibraryService {
         this.schedulerFacade.runAsync(() -> {
             try {
                 final List<UUID> replacedShelfIds = this.repository.replaceShelfAtLocation(shelf);
-                for (UUID replacedShelfId : replacedShelfIds) {
-                    removeShelfRuntime(replacedShelfId);
-                }
-                putShelfRuntime(shelf);
+                this.pendingShelfCreates.put(shelf.shelfId(), new PendingShelfCreate(shelf, List.copyOf(replacedShelfIds)));
                 onSuccess.run();
             } catch (final Throwable throwable) {
                 onFailure.accept(throwable);
+            }
+        });
+    }
+
+    public boolean activateCreatedShelf(final UUID shelfId) {
+        final PendingShelfCreate pendingCreate = this.pendingShelfCreates.remove(shelfId);
+        if (pendingCreate == null) {
+            return false;
+        }
+        for (UUID replacedShelfId : pendingCreate.replacedShelfIds()) {
+            removeShelfRuntime(replacedShelfId);
+        }
+        putShelfRuntime(pendingCreate.shelf());
+        return true;
+    }
+
+    public void deleteUnboundShelf(final UUID shelfId, final Runnable onSuccess, final Consumer<Throwable> onFailure) {
+        this.schedulerFacade.runAsync(() -> {
+            try {
+                this.repository.deleteShelfCascade(shelfId);
+                onSuccess.run();
+            } catch (final Throwable throwable) {
+                onFailure.accept(throwable);
+            } finally {
+                this.pendingShelfCreates.remove(shelfId);
             }
         });
     }
@@ -315,6 +338,12 @@ public final class LibraryService {
             return onlineAuthor.getUniqueId();
         }
         return null;
+    }
+
+    private record PendingShelfCreate(
+            LibraryShelf shelf,
+            List<UUID> replacedShelfIds
+    ) {
     }
 
     private void putShelfRuntime(final LibraryShelf shelf) {
