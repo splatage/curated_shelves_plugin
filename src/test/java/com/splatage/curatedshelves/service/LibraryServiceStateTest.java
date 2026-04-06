@@ -72,6 +72,30 @@ class LibraryServiceStateTest {
         assertTrue(service.allShelfSnapshotsSorted().isEmpty());
     }
 
+
+    @Test
+    void deleteUnboundShelfKeepsShelfHiddenAndPreventsLaterActivation() {
+        final FakeRepository repository = new FakeRepository();
+        final LibraryService service = new LibraryService(plugin(), new ImmediateScheduler(), repository);
+        final LibraryShelf shelf = new LibraryShelf(
+                UUID.randomUUID(),
+                new LocationKey(UUID.randomUUID(), 30, 64, 30),
+                1,
+                UUID.randomUUID(),
+                "Creator",
+                3L,
+                3L
+        );
+
+        service.createShelf(shelf, () -> { }, throwable -> { throw new AssertionError(throwable); });
+        service.deleteUnboundShelf(shelf.shelfId(), () -> { }, throwable -> { throw new AssertionError(throwable); });
+
+        assertTrue(service.shelfById(shelf.shelfId()).isEmpty());
+        assertTrue(service.snapshotIfPresent(shelf.shelfId()).isEmpty());
+        assertTrue(service.allShelfSnapshotsSorted().isEmpty());
+        assertFalse(service.activateCreatedShelf(shelf.shelfId()));
+    }
+
     private Plugin plugin() {
         return (Plugin) Proxy.newProxyInstance(
                 Plugin.class.getClassLoader(),

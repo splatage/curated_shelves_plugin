@@ -164,8 +164,15 @@ public final class LibraryCommand implements CommandExecutor, TabCompleter {
                     () -> this.plugin.schedulerFacade().runForPlayer(player, () -> player.sendMessage("Library Shelf unmarked.")),
                     throwable -> {
                         this.libraryService.discardShelfRuntime(shelfId);
-                        this.plugin.getLogger().log(Level.SEVERE, "Failed to unmark Library Shelf", throwable);
-                        this.plugin.schedulerFacade().runForPlayer(player, () -> player.sendMessage("Failed to unmark that shelf. Runtime state discarded."));
+                        this.plugin.getLogger().log(
+                                Level.SEVERE,
+                                "Failed to unmark Library Shelf " + shelfId
+                                        + " at " + snapshot.get().shelf().location()
+                                        + "; runtime state discarded and persisted cleanup may remain until the next startup reconciliation.",
+                                throwable
+                        );
+                        this.plugin.schedulerFacade().runForPlayer(player, () ->
+                                player.sendMessage("Failed to unmark that shelf. Runtime state discarded; persisted cleanup may remain until restart."));
                     }
             );
         });

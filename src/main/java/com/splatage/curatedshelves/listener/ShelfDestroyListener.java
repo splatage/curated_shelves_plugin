@@ -90,7 +90,13 @@ public final class ShelfDestroyListener implements Listener {
                 () -> { },
                 throwable -> {
                     this.libraryService.discardShelfRuntime(shelfId);
-                    this.plugin.getLogger().log(Level.SEVERE, "Failed to delete destroyed Library Shelf data; runtime state discarded", throwable);
+                    this.plugin.getLogger().log(
+                            Level.SEVERE,
+                            "Failed to delete destroyed Library Shelf data for shelf " + shelfId
+                                    + " at " + snapshot.get().shelf().location()
+                                    + "; runtime state discarded and persisted cleanup may remain until the next startup reconciliation.",
+                            throwable
+                    );
                 }
         );
     }

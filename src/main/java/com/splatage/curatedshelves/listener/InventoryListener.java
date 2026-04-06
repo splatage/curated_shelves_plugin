@@ -262,13 +262,13 @@ public final class InventoryListener implements Listener {
         );
     }
 
-    private boolean canOpenLibraryMenu(final Player player) {
+    static boolean canOpenLibraryMenu(final Player player) {
         return player.hasPermission("curatedshelves.use")
                 || player.hasPermission("curatedshelves.admin.browse")
                 || player.hasPermission("curatedshelves.admin.edit");
     }
 
-    private boolean canEditLibraryMenu(final Player player) {
+    static boolean canEditLibraryMenu(final Player player) {
         return player.hasPermission("curatedshelves.use")
                 || player.hasPermission("curatedshelves.admin.edit");
     }

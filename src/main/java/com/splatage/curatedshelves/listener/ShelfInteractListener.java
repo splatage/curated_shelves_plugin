@@ -81,12 +81,17 @@ public final class ShelfInteractListener implements Listener {
         }
 
         event.setCancelled(true);
-        if (!event.getPlayer().hasPermission("curatedshelves.use")
-                && !event.getPlayer().hasPermission("curatedshelves.admin.edit")) {
+        if (!canOpenDirectLibraryMenu(event.getPlayer())) {
             event.getPlayer().sendMessage("You do not have permission to use Library Shelves.");
             return;
         }
         LibraryViews.openShelfMenu(event.getPlayer(), snapshot.get());
+    }
+
+
+    static boolean canOpenDirectLibraryMenu(final Player player) {
+        return player.hasPermission("curatedshelves.use")
+                || player.hasPermission("curatedshelves.admin.edit");
     }
 
     private void handleSealUse(final Player player, final Block block) {
