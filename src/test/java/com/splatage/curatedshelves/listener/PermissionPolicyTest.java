@@ -12,7 +12,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class PermissionPolicyTest {
     @Test
     void browseOnlyCanOpenFromBrowserButCannotEditOrOpenDirectly() {
-        final Player browseOnly = player(Set.of("curatedshelves.admin.browse"));
+        final Player browseOnly = player(Set.of("curatedshelves.admin.browse"), Set.of("curatedshelves.use"));
         assertTrue(InventoryListener.canOpenLibraryMenu(browseOnly));
         assertFalse(InventoryListener.canEditLibraryMenu(browseOnly));
         assertFalse(ShelfInteractListener.canOpenDirectLibraryMenu(browseOnly));
@@ -34,13 +34,20 @@ class PermissionPolicyTest {
         assertTrue(ShelfInteractListener.canOpenDirectLibraryMenu(user));
     }
 
-    private Player player(final Set<String> permissions) {
+    private Player player(final Set<String> grantedPermissions) {
+        return player(grantedPermissions, Set.of());
+    }
+
+    private Player player(final Set<String> grantedPermissions, final Set<String> explicitlySetPermissions) {
         return (Player) Proxy.newProxyInstance(
                 Player.class.getClassLoader(),
                 new Class[]{Player.class},
                 (proxy, method, args) -> {
                     if (method.getName().equals("hasPermission") && args != null && args.length == 1) {
-                        return permissions.contains((String) args[0]);
+                        return grantedPermissions.contains((String) args[0]);
+                    }
+                    if (method.getName().equals("isPermissionSet") && args != null && args.length == 1) {
+                        return explicitlySetPermissions.contains((String) args[0]);
                     }
                     return defaultValue(method.getReturnType());
                 }
