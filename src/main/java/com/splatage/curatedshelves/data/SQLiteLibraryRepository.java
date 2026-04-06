@@ -40,7 +40,7 @@ public final class SQLiteLibraryRepository extends AbstractJdbcLibraryRepository
                       x INTEGER NOT NULL,
                       y INTEGER NOT NULL,
                       z INTEGER NOT NULL,
-                      rows INTEGER NOT NULL,
+                      row_count INTEGER NOT NULL,
                       created_by_uuid TEXT NOT NULL,
                       created_by_name TEXT NOT NULL,
                       created_at INTEGER NOT NULL,
@@ -75,14 +75,14 @@ public final class SQLiteLibraryRepository extends AbstractJdbcLibraryRepository
     protected void upsertShelf(final Connection connection, final LibraryShelf shelf) throws SQLException {
         try (PreparedStatement statement = connection.prepareStatement(
                 """
-                        INSERT INTO %s (shelf_id, world_uuid, x, y, z, rows, created_by_uuid, created_by_name, created_at, updated_at)
+                        INSERT INTO %s (shelf_id, world_uuid, x, y, z, row_count, created_by_uuid, created_by_name, created_at, updated_at)
                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         ON CONFLICT(shelf_id) DO UPDATE SET
                           world_uuid = excluded.world_uuid,
                           x = excluded.x,
                           y = excluded.y,
                           z = excluded.z,
-                          rows = excluded.rows,
+                          row_count = excluded.row_count,
                           created_by_uuid = excluded.created_by_uuid,
                           created_by_name = excluded.created_by_name,
                           updated_at = excluded.updated_at

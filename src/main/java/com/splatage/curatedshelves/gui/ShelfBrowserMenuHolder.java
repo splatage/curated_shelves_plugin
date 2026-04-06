@@ -15,7 +15,7 @@ public final class ShelfBrowserMenuHolder implements InventoryHolder {
     public ShelfBrowserMenuHolder(final int page, final int totalPages, final List<UUID> shelfIdsBySlot) {
         this.page = page;
         this.totalPages = totalPages;
-        this.shelfIdsBySlot = java.util.Collections.unmodifiableList(new java.util.ArrayList<>(shelfIdsBySlot));
+        this.shelfIdsBySlot = java.util.Collections.unmodifiableList(shelfIdsBySlot);
     }
 
     public int page() {

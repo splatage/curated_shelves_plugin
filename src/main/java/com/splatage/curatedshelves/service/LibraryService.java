@@ -177,7 +177,8 @@ public final class LibraryService {
     }
 
     public boolean canRemoveBook(final Player player, final LibraryBook book, final PluginConfig config) {
-        if (player.hasPermission("curatedshelves.librarian.remove.any")) {
+        if (player.hasPermission("curatedshelves.librarian.remove.any")
+                || player.hasPermission("curatedshelves.admin.browse")) {
             return true;
         }
         if (player.getUniqueId().equals(book.shelvedByUuid())) {

@@ -82,12 +82,12 @@ public final class InventoryListener implements Listener {
             event.setCancelled(true);
             return;
         }
-        if (event.getRawSlot() >= topInventory.getSize()) {
+        final int rawSlot = event.getRawSlot();
+        if (event.getClickedInventory() != topInventory || rawSlot < 0 || rawSlot >= topInventory.getSize()) {
             return;
         }
         event.setCancelled(true);
 
-        final int rawSlot = event.getRawSlot();
         if (rawSlot == ShelfBrowserMenu.PREVIOUS_PAGE_SLOT && holder.page() > 0) {
             LibraryViews.openShelfBrowserMenu(player, this.libraryService.allShelfSnapshotsSorted(), holder.page() - 1);
             return;
@@ -116,7 +116,8 @@ public final class InventoryListener implements Listener {
             event.setCancelled(true);
             return;
         }
-        if (event.getRawSlot() >= topInventory.getSize()) {
+        final int rawSlot = event.getRawSlot();
+        if (event.getClickedInventory() != topInventory || rawSlot < 0 || rawSlot >= topInventory.getSize()) {
             return;
         }
         event.setCancelled(true);
@@ -131,14 +132,14 @@ public final class InventoryListener implements Listener {
         }
 
         final UUID shelfId = holder.shelfId();
-        final boolean canUseShelves = player.hasPermission("curatedshelves.use");
+        final boolean canEditShelves = canEditLibraryMenu(player);
         if (this.libraryService.shelfById(shelfId).isEmpty() || this.libraryService.isShelfPendingRemoval(shelfId)) {
             player.closeInventory();
             player.sendMessage("That Library Shelf is no longer available.");
             return;
         }
 
-        final int clickedSlot = event.getRawSlot();
+        final int clickedSlot = rawSlot;
         final ItemStack cursor = event.getCursor();
         final LibraryBook existingBook = this.libraryService.bookAt(shelfId, clickedSlot).orElse(null);
         if (existingBook != null) {
@@ -153,7 +154,7 @@ public final class InventoryListener implements Listener {
         if (!LibraryItems.isSupportedBook(cursor)) {
             return;
         }
-        if (!canUseShelves) {
+        if (!canEditShelves) {
             player.sendMessage("You do not have permission to shelve books.");
             return;
         }
@@ -195,7 +196,9 @@ public final class InventoryListener implements Listener {
             event.setCancelled(true);
             return;
         }
-        if (event.getRawSlot() >= event.getView().getTopInventory().getSize()) {
+        final Inventory topInventory = event.getView().getTopInventory();
+        final int rawSlot = event.getRawSlot();
+        if (event.getClickedInventory() != topInventory || rawSlot < 0 || rawSlot >= topInventory.getSize()) {
             return;
         }
         event.setCancelled(true);
@@ -220,11 +223,11 @@ public final class InventoryListener implements Listener {
             return;
         }
 
-        if (event.getRawSlot() == BookActionMenu.READ_SLOT) {
+        if (rawSlot == BookActionMenu.READ_SLOT) {
             player.openBook(BookCodec.deserializeItem(book.serializedItem()));
             return;
         }
-        if (event.getRawSlot() != BookActionMenu.REMOVE_SLOT) {
+        if (rawSlot != BookActionMenu.REMOVE_SLOT) {
             return;
         }
         if (!this.libraryService.canRemoveBook(player, book, this.plugin.pluginConfig())) {
@@ -259,6 +262,11 @@ public final class InventoryListener implements Listener {
     }
 
     private boolean canOpenLibraryMenu(final Player player) {
+        return player.hasPermission("curatedshelves.use")
+                || player.hasPermission("curatedshelves.admin.browse");
+    }
+
+    private boolean canEditLibraryMenu(final Player player) {
         return player.hasPermission("curatedshelves.use")
                 || player.hasPermission("curatedshelves.admin.browse");
     }

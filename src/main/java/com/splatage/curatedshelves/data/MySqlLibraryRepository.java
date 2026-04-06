@@ -56,7 +56,7 @@ public final class MySqlLibraryRepository extends AbstractJdbcLibraryRepository 
                       x INT NOT NULL,
                       y INT NOT NULL,
                       z INT NOT NULL,
-                      rows INT NOT NULL,
+                      row_count INT NOT NULL,
                       created_by_uuid VARCHAR(36) NOT NULL,
                       created_by_name VARCHAR(255) NOT NULL,
                       created_at BIGINT NOT NULL,
@@ -88,14 +88,14 @@ public final class MySqlLibraryRepository extends AbstractJdbcLibraryRepository 
     protected void upsertShelf(final Connection connection, final LibraryShelf shelf) throws SQLException {
         try (PreparedStatement statement = connection.prepareStatement(
                 """
-                        INSERT INTO %s (shelf_id, world_uuid, x, y, z, rows, created_by_uuid, created_by_name, created_at, updated_at)
+                        INSERT INTO %s (shelf_id, world_uuid, x, y, z, row_count, created_by_uuid, created_by_name, created_at, updated_at)
                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         ON DUPLICATE KEY UPDATE
                           world_uuid = VALUES(world_uuid),
                           x = VALUES(x),
                           y = VALUES(y),
                           z = VALUES(z),
-                          rows = VALUES(rows),
+                          row_count = VALUES(row_count),
                           created_by_uuid = VALUES(created_by_uuid),
                           created_by_name = VALUES(created_by_name),
                           updated_at = VALUES(updated_at)

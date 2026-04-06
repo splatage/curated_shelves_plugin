@@ -56,7 +56,7 @@ public abstract class AbstractJdbcLibraryRepository implements LibraryRepository
         try (Connection connection = openConnection()) {
             prepareConnection(connection);
             try (PreparedStatement statement = connection.prepareStatement(
-                    "SELECT shelf_id, world_uuid, x, y, z, rows, created_by_uuid, created_by_name, created_at, updated_at FROM " + shelvesTable()
+                    "SELECT shelf_id, world_uuid, x, y, z, row_count, created_by_uuid, created_by_name, created_at, updated_at FROM " + shelvesTable()
             )) {
                 try (ResultSet resultSet = statement.executeQuery()) {
                     while (resultSet.next()) {
@@ -68,7 +68,7 @@ public abstract class AbstractJdbcLibraryRepository implements LibraryRepository
                                         resultSet.getInt("y"),
                                         resultSet.getInt("z")
                                 ),
-                                resultSet.getInt("rows"),
+                                resultSet.getInt("row_count"),
                                 UUID.fromString(resultSet.getString("created_by_uuid")),
                                 resultSet.getString("created_by_name"),
                                 resultSet.getLong("created_at"),
