@@ -90,7 +90,7 @@ public final class ShelfInteractListener implements Listener {
 
 
     static boolean canOpenDirectLibraryMenu(final Player player) {
-        return player.hasPermission("curatedshelves.use")
+        return InventoryListener.hasDefaultUseAccess(player)
                 || player.hasPermission("curatedshelves.admin.edit");
     }
 
