@@ -93,16 +93,34 @@ public final class LibraryCommand implements CommandExecutor, TabCompleter {
                 shelf,
                 () -> this.plugin.schedulerFacade().runAtLocation(block.getLocation(), () -> {
                     if (!this.shelfMarkerService.isEligibleBlock(block)) {
-                        this.libraryService.deleteShelf(shelf.shelfId(), () -> { }, deleteFailure -> {
-                                this.libraryService.discardShelfRuntime(shelf.shelfId());
-                                this.plugin.getLogger().log(Level.SEVERE, "Failed to clean up orphaned Library Shelf", deleteFailure);
-                        });
+                        this.libraryService.deleteUnboundShelf(shelf.shelfId(), () -> { }, deleteFailure ->
+                                this.plugin.getLogger().log(Level.SEVERE, "Failed to clean up unbound Library Shelf", deleteFailure)
+                        );
                         this.plugin.schedulerFacade().runForPlayer(player, () -> player.sendMessage("The target shelf changed before it could be marked."));
                         return;
                     }
-                    this.shelfMarkerService.mark(block, shelf.shelfId());
-                    this.badgeService.ensureBadge(block, shelf);
-                    this.plugin.schedulerFacade().runForPlayer(player, () -> player.sendMessage("Library Shelf marked."));
+                    try {
+                        this.shelfMarkerService.mark(block, shelf.shelfId());
+                        this.badgeService.ensureBadge(block, shelf);
+                        if (!this.libraryService.activateCreatedShelf(shelf.shelfId())) {
+                            this.shelfMarkerService.unmark(block);
+                            this.badgeService.removeBadge(block, shelf.shelfId());
+                            this.libraryService.deleteUnboundShelf(shelf.shelfId(), () -> { }, deleteFailure ->
+                                    this.plugin.getLogger().log(Level.SEVERE, "Failed to clean up unbound Library Shelf", deleteFailure)
+                            );
+                            this.plugin.schedulerFacade().runForPlayer(player, () -> player.sendMessage("The Library Shelf could not be finalized."));
+                            return;
+                        }
+                        this.plugin.schedulerFacade().runForPlayer(player, () -> player.sendMessage("Library Shelf marked."));
+                    } catch (final Throwable throwable) {
+                        this.shelfMarkerService.unmark(block);
+                        this.badgeService.removeBadge(block, shelf.shelfId());
+                        this.libraryService.deleteUnboundShelf(shelf.shelfId(), () -> { }, deleteFailure ->
+                                this.plugin.getLogger().log(Level.SEVERE, "Failed to clean up unbound Library Shelf", deleteFailure)
+                        );
+                        this.plugin.getLogger().log(Level.SEVERE, "Failed to finalize Library Shelf binding", throwable);
+                        this.plugin.schedulerFacade().runForPlayer(player, () -> player.sendMessage("Failed to mark that shelf."));
+                    }
                 }),
                 throwable -> this.plugin.schedulerFacade().runForPlayer(player, () -> {
                     this.plugin.getLogger().log(Level.SEVERE, "Failed to mark Library Shelf", throwable);
